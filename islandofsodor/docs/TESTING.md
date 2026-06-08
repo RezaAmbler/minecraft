@@ -57,6 +57,24 @@ must be verified **in the real client (Java 26.1.2)**. After testing, drop `late
 - [ ] Each of the 7 engines summons with its own colours (Thomas blue, James red, Henry green, …).
 - [ ] Click **Put engine away** (or `/function sodor:engine/stop`) → you dismount, model removed.
 
+## Detailing pass — signs, props, trees, docks, welcome (P-detail)
+- [ ] **Name signs render** — every station platform has a readable name board (Knapford, Tidmouth,
+      Wellsworth, Brendam Docks, Maron, Crovan's Gate, Vicarstown, Ffarquhar). Confirm the **engraved
+      sign shows the name** (not blank, not boxes) and faces the track. *This is the new block-entity
+      path — if a sign is blank/garbled, flip `config [detailing].signs = "text_display"` and rebuild.*
+- [ ] **Spawn welcome** — beside the Thomas statue at Knapford there's a **lectern**; right-click it to
+      read the welcome book (3 pages). *If the book is blank/broken, flip `[detailing].welcome =
+      "text_display"`; the WELCOME header sign should read regardless.*
+- [ ] **Props look sensible + clear of the track** — water towers, signal boxes, covered footbridges
+      (you can walk over them; they clear the track), platform canopies, benches, planters, white
+      fencing, red phone boxes. Nothing sits **on** the rails; the footbridges don't block trains.
+- [ ] **Trees don't block the line** — ride the **full loop + both branches**: no leaves or trunks over
+      the track, no tree on the rails. The island should look lushly wooded with open fields between.
+- [ ] **Brendam Docks** reads like a working dock — quay edge, several cranes, goods sheds, crates/
+      barrels — and the branch is **still rideable to the terminus**.
+- [ ] **Wellsworth** reads like a classic main-line station — **two buildings flanking** the track, a
+      footbridge, a signal box — and the **Brendam junction still throws** (the lever still works).
+
 ## Things likely to need tuning from your feedback
 - Engine model **orientation** (which way is "forward") and **scale/offset** vs the minecart.
 - Whether the minecart **keeps rolling** the whole loop (booster spacing in `config/layout.toml [rail]`).

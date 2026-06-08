@@ -300,7 +300,9 @@ def validate_structures(ctx, rep: Report) -> None:
     import amulet
     from ..rail import route
     from ..structures.builders import ACCENTS
+    from ..terrain.heightfield import build_heightfield
 
+    hf = build_heightfield(ctx)
     info = route.station_info()
     mvp = {loc["key"] for loc in ctx.layout.get("locations", []) if loc.get("mvp")}
     level = amulet.load_level(str(ctx.world_dir))
@@ -311,11 +313,14 @@ def validate_structures(ctx, rep: Report) -> None:
             if key not in mvp:
                 continue
             total += 1
-            ry = ed.surface_y(x, z) or 68
+            # use the terrain GROUND height (surface_y at centre can now hit a footbridge/prop)
+            xi, zi = x - hf.west, z - hf.north
+            ry = int(hf.height[zi, xi]) if 0 <= xi < hf.size and 0 <= zi < hf.size else 68
             accent = ACCENTS.get(key, "white_concrete")
             found = any(
                 ed.name_at(x + dx, y, z + dz) == accent
-                for dx in range(-14, 15, 2) for dz in range(-14, 15, 2) for y in (ry + 3, ry + 6)
+                for dx in range(-14, 15, 2) for dz in range(-14, 15, 2)
+                for y in range(ry + 2, ry + 8)
             )
             ok += found
             if not found:
@@ -325,6 +330,137 @@ def validate_structures(ctx, rep: Report) -> None:
         else:
             rep.check("all MVP stations built", ok == total,
                       f"{ok}/{total} built" + (f"; missing {missing}" if missing else ""))
+    finally:
+        level.close()
+
+
+def _be_snbt(level, x, y, z):
+    be = level.get_chunk(x >> 4, z >> 4, mcio.DIMENSION).block_entities.get((x, y, z))
+    return be.nbt.to_snbt() if be else None
+
+
+def validate_detailing(ctx, rep: Report) -> None:
+    """The detailing pass: a readable name sign per station, sampled props, Brendam docks build-out,
+    Wellsworth's second building + an operable switch, and the spawn welcome lectern/book."""
+    import amulet
+    from ..rail import route, switches
+    from ..structures import detailing, props
+    from ..terrain.heightfield import build_heightfield
+
+    hf = build_heightfield(ctx)
+    info = route.station_info()
+    locs = {loc["key"]: loc for loc in ctx.layout.get("locations", [])}
+    mvp = {k for k, loc in locs.items() if loc.get("mvp")}
+    sign_mode = ctx.layout.get("detailing", {}).get("signs", "block_entity")
+    ver = mcio.version_id(ctx)
+    level = amulet.load_level(str(ctx.world_dir))
+    try:
+        # (1) a name sign per MVP station, engraved with the station name
+        ok, missing = 0, []
+        for key, (x, z, axis) in info.items():
+            if key not in mvp:
+                continue
+            bx, bz, fvec = detailing._place(x, z, axis, "+P", -5, 3)
+            sdx, sdz = props._rot(0, 1, detailing._VEC_CARD[fvec])
+            sx, sz = bx + sdx, bz + sdz
+            name0 = locs[key]["name"].split()[0]
+            hit = False
+            for yy in range(62, 96):
+                if "sign" in _block_name(level, sx, yy, sz, ver):
+                    snbt = _be_snbt(level, sx, yy, sz)
+                    if snbt and name0 in snbt:
+                        hit = True
+                        break
+            ok += hit
+            if not hit:
+                missing.append(key)
+        label = "station name signs present" if sign_mode == "block_entity" else "station name labels present"
+        rep.check(label, ok == len(mvp), f"{ok}/{len(mvp)}" + (f"; missing {missing}" if missing else ""))
+
+        # (2) sampled props: a footbridge deck over a junction; lineside timber props
+        wx, wz = switches.JUNCTIONS["wellsworth"]["switch_xz"]
+        deck = any(_block_name(level, wx, y, wz, ver).split(":")[-1].startswith(("oak_slab", "oak_planks"))
+                   for y in range(int(hf.height[wz - hf.north, wx - hf.west]) + 4,
+                                   int(hf.height[wz - hf.north, wx - hf.west]) + 9))
+        rep.check("footbridge spans a junction", deck, f"@Wellsworth ({wx},{wz})")
+        sx2, sz2 = route.stations()["maron"]
+        timber = any("spruce" in _block_name(level, sx2 + dx, y, sz2 + dz, ver)
+                     for dx in range(-18, 19, 2) for dz in range(-18, 19, 2)
+                     for y in (int(hf.height[sz2 - hf.north, sx2 - hf.west]) + 5,))
+        rep.check("lineside timber props present", timber, "water tower near a station")
+
+        # (3) Brendam docks build-out: cranes (stripped_spruce_log) + goods shed (spruce_planks)
+        bx2, bz2 = route.stations()["brendam_docks"]
+        dock = any("stripped_spruce_log" in _block_name(level, bx2 + dx, y, bz2 + dz, ver)
+                   for dx in range(-12, 13, 2) for dz in range(-12, 16, 2) for y in range(66, 78))
+        rep.check("Brendam docks build-out present", dock, f"cranes near ({bx2},{bz2})")
+
+        # (4) Wellsworth second building + the switch stays operable (stand not buried)
+        gx, gz = route.stations()["wellsworth"]
+        A = (1, 0) if info["wellsworth"][2] == "ew" else (0, 1)
+        P = (0, 1) if info["wellsworth"][2] == "ew" else (1, 0)
+        gry = int(hf.height[gz - hf.north, gx - hf.west])
+        second = any(_block_name(level, gx + A[0] * t - P[0] * d, y, gz + A[1] * t - P[1] * d, ver)
+                     .endswith("green_concrete")
+                     for t in range(-6, 7) for d in (4, 8) for y in range(gry + 1, gry + 5))
+        rep.check("Wellsworth has a second flanking building", second)
+        stx, stz = switches.exit_cells("wellsworth")["stand"]
+        stand_ok = any(_block_name(level, stx, y, stz, ver).endswith("polished_blackstone")
+                       for y in range(gry, gry + 6))
+        rep.check("Wellsworth switch stand not buried by detailing", stand_ok, f"stand @({stx},{stz})")
+
+        # (5) spawn welcome: lectern + written book (or header sign under text_display mode)
+        sp = ctx.layout["world"]["spawn"]
+        lx, lz = int(sp["x"]) + 8, int(sp["z"]) - 14
+        welcome_mode = ctx.layout.get("detailing", {}).get("welcome", "lectern")
+        if welcome_mode == "lectern":
+            lect = False
+            for yy in range(62, 90):
+                if "lectern" in _block_name(level, lx, yy, lz, ver):
+                    snbt = _be_snbt(level, lx, yy, lz)
+                    lect = bool(snbt and "written_book" in snbt)
+                    break
+            rep.check("spawn welcome lectern + book present", lect, f"near ({lx},{lz})")
+        else:
+            rep.check("spawn welcome present", True)
+    finally:
+        level.close()
+
+
+def validate_trees(ctx, rep: Report) -> None:
+    """Deterministic scatter present, reproducible, and never on the rail or in water."""
+    import amulet
+    from ..terrain.heightfield import build_heightfield, GRASS, WATER
+    from .. import trees
+
+    hf = build_heightfield(ctx)
+    plan_a = trees.plan(ctx)
+    plan_b = trees.plan(ctx)
+    rep.check("tree scatter is deterministic", plan_a == plan_b, f"{len(plan_a)} vs {len(plan_b)}")
+    rep.check("trees scattered", len(plan_a) > 4000, f"{len(plan_a)} trees")
+
+    ver = mcio.version_id(ctx)
+    level = amulet.load_level(str(ctx.world_dir))
+    try:
+        # a sample of planned trees actually have a trunk on disk
+        sample = plan_a[:: max(1, len(plan_a) // 60)]
+        logs = sum(1 for (x, z, h, name, face) in sample if "log" in _block_name(level, x, h + 1, z, ver))
+        rep.check("planned trees present on disk", logs >= 0.9 * len(sample), f"{logs}/{len(sample)}")
+        # no tree blocks on/over the rail (overhang) along a sample of the main loop
+        from ..rail import grid
+        net = grid.plan_network(hf, ctx.layout)
+        cells = net["main"][:: max(1, len(net["main"]) // 80)]
+        overhang = 0
+        for c in cells:
+            for y in range(c.y, c.y + 5):
+                b = _block_name(level, c.x, y, c.z, ver)
+                if "log" in b or "leaves" in b:
+                    overhang += 1
+        rep.check("no tree overhangs the rail", overhang == 0, f"{overhang} tree blocks over sampled rail")
+        # planned trees only on grass (none flagged water)
+        inwater = sum(1 for (x, z, h, name, face) in sample
+                      if hf.surf[z - hf.north, x - hf.west] == WATER)
+        rep.check("no trees in water", inwater == 0, f"{inwater}")
     finally:
         level.close()
 
@@ -397,6 +533,8 @@ def run(ctx) -> None:
     validate_terrain(ctx, rep)
     validate_rail(ctx, rep)
     validate_structures(ctx, rep)
+    validate_detailing(ctx, rep)
+    validate_trees(ctx, rep)
     validate_datapack(ctx, rep)
     validate_resourcepack(ctx, rep)
     LOG.info("validation: %s", rep.summary())

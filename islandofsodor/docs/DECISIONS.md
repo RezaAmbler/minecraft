@@ -2,6 +2,43 @@
 
 Newest first. Each entry: date · decision · why · consequences.
 
+## 2026-06-07 — Detailing pass (signs, props, trees, Brendam/Wellsworth, welcome)
+
+### D19. In-world text via block-entities (real signs + a lectern/book), with a text_display fallback
+**Why:** Stations needed readable name boards and the spawn needed a welcome; the user chose real
+engraved signs + a written book over floating text. **Block-entities are feasible and survive the
+`entities/` finalize strip** — they live in region chunks, not in `entities/*.mca` (the store that
+crashed 26.1.2). New `mcio.WorldEditor` methods: `set_block_entity` / `set_sign` / `set_lectern_book`.
+**Verified the hard part empirically:** amulet 1.9.40 stores block-entities in **universal** form, and
+its sign converter reads `utags.<side>.java_nbt` (a list of NBT text-component compounds). Plain native
+`messages` get dropped; injecting the `utags`-wrapped universal form (`front_text.java_nbt:[{text:…}]`)
+round-trips to valid native 1.21.8 sign NBT (the client upgrades 4440→26.1.2 on load). The lectern has
+**no** converter, so its native `{Book:{components:{written_book_content:…}}, Page}` stores verbatim.
+**Consequence:** real signs at every station + a welcome book; the written book is the one
+unverifiable-in-26.1.2 bit, so both are gated by `config [detailing].signs`/`.welcome` switches with a
+proven `text_display` fallback (one-line flip). Reproducible (static NBT, deterministic serialization).
+
+### D20. Deterministic lush scattered trees (new phase, after rail)
+**Why:** The island read as bare. A new `src/trees` phase scatters small custom oak/birch (lowland) +
+spruce (highland) models. Placement is a **seeded jittered grid** — a single `np.random.default_rng(seed)`
+consumed in fixed row-major order — so every rebuild yields the identical forest (byte-reproducible).
+Runs **after rail** so the exclusion mask reads the laid corridor; excludes non-grass (sand/rock/snow/
+water), the rail corridor + an **overhang ring** (leaf-radius+1, so no tree reaches over the track),
+switch cells, station/dock footprints, and the spawn statue/welcome plaza. ~23k trees (`[trees]`
+seed/grid_step/keep tunable). **Consequence:** the validator asserts determinism + no tree on/over rail
++ none in water; trees add ~33s to the build.
+
+### D21. Declarative per-type detailing distribution (vs dozens of registry entries)
+**Why:** Distributing ~10 prop types across 8 stations as hand-written `[[structures]]` entries would be
+huge. Instead props are authored once like `statue.py` (`props.py`: `*_blocks(facing)` + mtime=0
+`export_schem`), and `detailing.py` places a per-station-type **kit** (small halts get less; junctions/
+termini get the full set: canopy, signal box, footbridge, water tower, phone box, benches, planters,
+fencing, name board). Switches (`signs`/`welcome`/`clearance`) live in `config [detailing]`. The
+corridor/switch guard reads the rail **plan** (`grid.plan_network` + `switches.exit_cells`), not the
+world, because detailing runs **before** rail (structures-before-rail invariant). **Consequence:** every
+prop stays off the running line and off the switch lever/stand; Brendam (build_docks) + Wellsworth (a
+second flanking building) extend the same library.
+
 ## 2026-06-07 — Rail rideability rewrite + Thomas statue (P3.7–P3.9, P4 polish)
 
 ### D16. Rails are now genuinely vanilla-rideable (supersedes the geometry half of D15)

@@ -37,12 +37,13 @@ PHASE_MODULES = {
     "engines": "src.entities",
     "datapack": "src.datapack",
     "resourcepack": "src.resourcepack",
+    "trees": "src.trees",
     "validate": "src.validate",
 }
 # Order for `all`. Structures run BEFORE rail so the rail corridor (incl. branch departures
 # through station platforms) is laid last and is never buried/erased by a station's flatten —
 # the line must stay rideable. `finalize` strips amulet artifacts; `package` zips; `validate` last.
-ALL_SEQUENCE = ["world", "terrain", "structures", "rail", "engines",
+ALL_SEQUENCE = ["world", "terrain", "structures", "rail", "trees", "engines",
                 "datapack", "resourcepack", "finalize", "package", "validate"]
 
 

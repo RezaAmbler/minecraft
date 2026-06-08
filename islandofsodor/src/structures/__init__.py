@@ -80,6 +80,7 @@ def run(ctx) -> None:
     from ..rail import route
     info = route.station_info()
     mvp = {loc["key"] for loc in ctx.layout.get("locations", []) if loc.get("mvp")}
+    types = {loc["key"]: loc.get("type") for loc in ctx.layout.get("locations", [])}
 
     t0 = time.time()
     built = []
@@ -97,12 +98,17 @@ def run(ctx) -> None:
                 builders.build_docks(ed, x, z, ry, axis)
             else:
                 builders.build_station(ed, x, z, ry, axis, accent)
+                if types.get(key) == "junction":   # flank the double track with a 2nd building
+                    builders.build_second_building(ed, x, z, ry, axis, accent)
             built.append(key)
             level.save()
             level.purge()
             ed.invalidate_cache()
             LOG.info("built %s @ (%d,%d) ry=%d (%s)", key, x, z, ry, axis)
+        from . import detailing, welcome
+        detailing.run_detailing(ctx, ed)
+        welcome.place_welcome(ctx, ed)
         _place_registry(ctx, ed)
         level.save()
-    LOG.info("Phase 4 structures complete: %d stations + %d registry in %.1fs",
+    LOG.info("Phase 4 structures complete: %d stations + detailing + %d registry in %.1fs",
              len(built), len(ctx.layout.get("structures", [])), time.time() - t0)

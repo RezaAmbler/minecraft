@@ -140,3 +140,61 @@ class WorldEditor:
 
     def invalidate_cache(self):
         self._cache_cx = self._cache_cz = None
+
+    # --- block entities (signs, lecterns) -------------------------------------
+    # Written natively into the chunk's block-entity store (keyed on absolute coords); these
+    # live in region chunks, so they SURVIVE the `entities/` finalize strip (DECISIONS D19).
+    _SIGN_ROT = {"south": 0, "west": 4, "north": 8, "east": 12}  # standing-sign rotation
+
+    def set_block_entity(self, x, y, z, base_name, compound, namespace="minecraft"):
+        import amulet_nbt
+        from amulet.api.block_entity import BlockEntity
+        ch = self._chunk_at(x >> 4, z >> 4)
+        be = BlockEntity(namespace, base_name, x, y, z, amulet_nbt.NamedTag(compound, ""))
+        ch.block_entities.insert(be)   # keys on absolute (x,y,z); overwrites any prior BE there
+        ch.changed = True
+
+    def set_sign(self, x, y, z, lines, facing="north", kind="oak", wall=False,
+                 color="black", glowing=False):
+        """Place a real sign with engraved text. amulet stores block-entities in UNIVERSAL
+        form and its sign converter reads `utags.<side>.java_nbt` (a list of NBT text-component
+        compounds) — verified to round-trip to valid native 1.21.8 NBT (DECISIONS D19).
+        `facing` = the direction the readable face points."""
+        import amulet_nbt as N
+        if wall:
+            self.set(x, y, z, f"{kind}_wall_sign", {"facing": facing})
+        else:
+            self.set(x, y, z, f"{kind}_sign", {"rotation": str(self._SIGN_ROT.get(facing, 0))})
+
+        def _face(strs):
+            strs = (list(strs) + ["", "", "", ""])[:4]
+            return N.CompoundTag({
+                "java_nbt": N.ListTag([N.CompoundTag({"text": N.StringTag(str(s))}) for s in strs]),
+                "color": N.StringTag(color),
+                "has_glowing_text": N.ByteTag(1 if glowing else 0),
+            })
+        nbt = N.CompoundTag({"utags": N.CompoundTag({
+            "front_text": _face(lines),
+            "back_text": _face([]),
+            "is_waxed": N.ByteTag(0),
+        })})
+        self.set_block_entity(x, y, z, "sign", nbt)
+
+    def set_lectern_book(self, x, y, z, facing, title, author, pages):
+        """Place a lectern holding a written book (1.21.8 item-component form). The pages text
+        is plain (literal text components). Highest render risk across the 4440->26.1.2 upgrade
+        (DECISIONS D19) — gated by a config switch with a text_display fallback."""
+        import amulet_nbt as N
+        self.set(x, y, z, "lectern", {"facing": facing, "has_book": "true", "powered": "false"})
+        book = N.CompoundTag({
+            "id": N.StringTag("minecraft:written_book"),
+            "count": N.IntTag(1),
+            "components": N.CompoundTag({
+                "minecraft:written_book_content": N.CompoundTag({
+                    "title": N.CompoundTag({"raw": N.StringTag(title)}),
+                    "author": N.StringTag(author),
+                    "pages": N.ListTag([N.CompoundTag({"raw": N.StringTag(str(p))}) for p in pages]),
+                })
+            }),
+        })
+        self.set_block_entity(x, y, z, "lectern", N.CompoundTag({"Book": book, "Page": N.IntTag(0)}))

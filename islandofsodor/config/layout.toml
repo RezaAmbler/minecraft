@@ -66,6 +66,20 @@ order = ["wellsworth", "brendam_docks"]
 [lines.ffarquhar]
 order = ["knapford", "elsbridge", "ffarquhar"]
 
+# --- Detailing pass — in-world text mode + how far props stay off the rail corridor ---
+[detailing]
+signs   = "block_entity"   # real engraved signs (fallback: "text_display")
+welcome = "lectern"        # lectern + written book at spawn (fallback: "text_display")
+clearance = 1              # props must stay this many blocks beyond the rail + shoulders
+
+# --- Scattered trees (deterministic, seeded) — lush English-countryside scatter ---
+[trees]
+seed        = 4441         # independent seed; SEEDED so every rebuild is identical
+grid_step   = 10           # jittered-grid cell size (smaller = denser)
+keep        = 0.5          # per-cell keep probability (lush)
+jitter      = 2            # max seeded offset within a grid cell
+spruce_min_y = 84          # spruce only at/above this height (and below the rock line)
+
 # --- Rail tuning (P3.7) — booster density + how closely the grid path tracks canon ---
 [rail]
 booster_every      = 4     # powered-rail spacing on straights (keeps a cart rolling)

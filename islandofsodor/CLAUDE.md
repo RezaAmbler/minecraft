@@ -3,8 +3,8 @@
 Persistent context for working in this repo. Read **BUILD_PLAN.md** first each session.
 
 ## Current state (2026-06-07)
-All 9 phases are **built, validated (55/55 structural checks), and packaged** (`build/dist/`).
-The world generates from scratch in ~37s and is byte-reproducible. **Client is Minecraft
+All phases are **built, validated (67/67 structural checks), and packaged** (`build/dist/`).
+The world generates from scratch in ~70s (incl. ~23k seeded trees) and is byte-reproducible. **Client is Minecraft
 26.1.2** (not 1.21.8 — see memory): the world is written at 1.21.8/4440 (amulet's reliable
 output) and 26.1.2 upgrades it on load; packs target 26.1.2 (datapack 101, resource 84).
 The amulet `entities/` chunks that crashed 26.1.2 are stripped by the `finalize` step.
@@ -12,9 +12,15 @@ The rail is now **genuinely vanilla-rideable** (P3.7–P3.9, DECISIONS D16–D17
 grid path with neighbour-derived curve/ascending shapes, lever-operated branch switches, and a
 permanent validator that proves connectivity + switch reachability. Structures lay **before**
 rail so the corridor is never buried. A **Thomas statue** greets the player at the Knapford
-spawn (P4.5, D18: code → `.schem` + registry). **Remaining: in-game play-test sign-off** (engine
-ride *feel*/orientation; does the cart clear the whole loop without stalling; lever polarity
-matches the sign; statue looks right). After the user tests, read `latest.log` (memory:
+spawn (P4.5, D18: code → `.schem` + registry). **Phase 10 detailing** (D19–D21): real
+block-entity **name signs** at every station + a **lectern/welcome book** at spawn (a new `mcio`
+block-entity capability, with a `[detailing].signs`/`.welcome` text_display fallback); a reusable
+**prop library** (`src/structures/props.py`) distributed per station type by `src/structures/detailing.py`;
+built-out **Brendam Docks** + enhanced **Wellsworth** (2nd building, footbridge); and ~23k **deterministic
+lush trees** (`src/trees`, seeded). **Remaining: in-game play-test sign-off** (engine ride
+*feel*/orientation; does the cart clear the whole loop without stalling; lever polarity matches the
+sign; **do the block-entity signs/book render in 26.1.2** — else flip the fallback switches; statue
++ detailing look right). After the user tests, read `latest.log` (memory:
 playtest-log-feedback-loop) and tune. Polish backlog: `docs/BACKLOG.md`.
 
 ## What this is

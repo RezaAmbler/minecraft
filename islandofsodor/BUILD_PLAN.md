@@ -83,8 +83,9 @@ Brendam Docks + main-line stops built and reachable · kid-safe settings.
 
 ## Phase 8 — Integration & packaging  ✅ (exit: one command regenerates + packages a validated, reproducible world)
 - [x] P8.1 `build.py all` regenerates everything end to end into clean `build/` (~36s)
-- [x] P8.2 Full validation suite (`src/validate`): **55 checks** — world/terrain/rail (incl. the P3.9
-      shape/connectivity/switch-reachability validator)/structures/datapack/resourcepack
+- [x] P8.2 Full validation suite (`src/validate`): **67 checks** — world/terrain/rail (P3.9
+      shape/connectivity/switch-reachability)/structures/detailing (signs, props, docks, Wellsworth,
+      welcome)/trees/datapack/resourcepack
 - [x] P8.3 Reproducibility: level.dat + datapack + resourcepack BYTE-identical across rebuilds (fixed-mtime gzip); region block-content identical (only .mca header timestamps vary)
 - [x] P8.4 Package: IslandOfSodor-world.zip (datapack inside) + IslandOfSodor-resourcepack.zip + INSTALL.md in build/dist/
 
@@ -98,3 +99,19 @@ Brendam Docks + main-line stops built and reachable · kid-safe settings.
   - [x] Kid-safe (Creative, locked clear midday, peaceful, no damage) in level.dat + load `setup`
   - [ ] P9.1a IN-GAME sign-off from a play-test (latest.log) — the only remaining MVP gate item
 - [~] P9.2 Polish backlog (post-MVP): see docs/BACKLOG.md
+
+## Phase 10 — Detailing pass  ✅ (exit: stations/island detailed; build reproducible; validation 67/67)
+- [x] P10.1 Block-entity capability (`mcio.set_sign`/`set_lectern_book`) — real engraved signs +
+      lectern books that survive the entities/ strip; text_display fallback switch. DECISIONS D19
+- [x] P10.2 Reusable prop library (`src/structures/props.py`): water tower, coal stage, footbridge,
+      canopy, signal box, bench, planter, phone box, picket fence, name board, warehouse/goods shed,
+      crate/barrel, crane — authored as code → mtime=0 `.schem`. D21
+- [x] P10.3 Declarative per-type detailing distribution (`src/structures/detailing.py` + `[detailing]`):
+      a name sign per station + per-type prop kits, guarded off the rail corridor + switch cells. D21
+- [x] P10.4 Brendam Docks build-out (quay, cranes, goods sheds, crates, lamps) + Wellsworth second
+      flanking building, footbridge, signal box (junction kit) — switch stays operable.
+- [x] P10.5 Deterministic LUSH trees (`src/trees`, ~23k): seeded jittered-grid, exclusion mask, never
+      over the track or in water; runs after rail. D20
+- [x] P10.6 Spawn welcome: lectern + written book + header sign beside the Thomas statue at Knapford.
+- [x] P10.7 Validation 55→**67** (signs/props/docks/Wellsworth/welcome/trees) + byte-reproducible
+      (seeded trees, mtime=0 schems, deterministic block-entity NBT). Repackaged build/dist/.

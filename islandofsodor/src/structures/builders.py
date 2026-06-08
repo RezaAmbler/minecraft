@@ -6,6 +6,8 @@ shed (roundhouse) by its turntable; Brendam gets a dock pier.
 """
 from __future__ import annotations
 
+from . import props
+
 # distinct accent concrete per station (navigation aid for kids)
 ACCENTS = {
     "tidmouth": "blue_concrete",
@@ -147,3 +149,57 @@ def build_docks(ed, x, z, ry, axis) -> None:
             ed.set(cx + P[0] * (-d), floor + 5, cz + P[1] * (-d), "stripped_spruce_log",
                    {"axis": "x" if axis == "ns" else "z"})
         ed.set(cx + P[0] * (-3), floor + 4, cz + P[1] * (-3), "chain")
+
+    # --- build-out: quay edge, more cranes, goods sheds, set-dressing, lamps ---
+    perp = "west" if axis == "ns" else "north"      # faces back toward the dock
+    land = "east" if axis == "ns" else "south"
+    # quay wall + capped deck along both pier edges
+    for t in (-4, 4):
+        for d in range(2, 16):
+            qx, qz = x + A[0] * t + P[0] * d, z + A[1] * t + P[1] * d
+            ed.set(qx, floor - 1, qz, "stone_bricks")
+            ed.set(qx, floor, qz, "oak_planks")
+            if d % 4 == 0:                          # pier lamps
+                ed.set(qx, floor + 1, qz, "oak_fence")
+                ed.set(qx, floor + 2, qz, "sea_lantern")
+    # two more cranes further along the pier
+    for t in (-2, 2):
+        cx, cz = x + A[0] * t + P[0] * 8, z + A[1] * t + P[1] * 8
+        for dx, dy, dz, blk, p in props.build("crane", perp):
+            ed.set(cx + dx, floor + dy, cz + dz, blk, p)
+    # crate / barrel set-dressing on the deck
+    for t, d in ((-1, 6), (1, 10), (2, 12)):
+        cx, cz = x + A[0] * t + P[0] * d, z + A[1] * t + P[1] * d
+        for dx, dy, dz, blk, p in props.build("crate_stack", "south"):
+            ed.set(cx + dx, floor + dy, cz + dz, blk, p)
+    # goods sheds on the landward (-P) side, flanking the approach
+    for t in (-6, 6):
+        gx, gz = x + A[0] * t - P[0] * 8, z + A[1] * t - P[1] * 8
+        gy = ed.surface_y(gx, gz) or ry
+        for dx, dy, dz, blk, p in props.build("goods_shed", land):
+            ed.set(gx + dx, gy + dy, gz + dz, blk, p)
+
+
+def build_second_building(ed, x, z, ry, axis, accent) -> None:
+    """A second station building flanking the track on the -P side (junction stations), so a
+    main-line station reads as double-track with buildings either side. Cleared of the switch
+    cells by the caller's placement (the switch stand sits at -P d1..2; this starts at d4)."""
+    A, P = _axes(axis)
+    floor = ry + 1
+    _flatten(ed, x, z, ry, A, P, 8, [(-1, 4, 8)])
+    b0, b1, bl = 4, 8, 6
+    for t in range(-bl, bl + 1):
+        for d in range(b0, b1 + 1):
+            bx = x + A[0] * t - P[0] * d
+            bz = z + A[1] * t - P[1] * d
+            ed.set(bx, floor, bz, "smooth_stone")
+            perim = t in (-bl, bl) or d in (b0, b1)
+            for up in range(1, 4):
+                ed.set(bx, floor + up, bz, accent if perim else "air")
+            ed.set(bx, floor + 4, bz, "smooth_stone_slab", {"type": "bottom"})
+    for t in range(-bl + 1, bl, 2):                 # back windows
+        bx, bz = x + A[0] * t - P[0] * b1, z + A[1] * t - P[1] * b1
+        ed.set(bx, floor + 2, bz, "glass")
+    dx, dz = x - P[0] * b0, z - P[1] * b0            # platform-side door
+    ed.set(dx, floor + 1, dz, "air")
+    ed.set(dx, floor + 2, dz, "air")

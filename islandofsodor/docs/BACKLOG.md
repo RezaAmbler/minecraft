@@ -11,7 +11,11 @@ feedback** (drop `latest.log` in the repo root; see docs/playtest loop in memory
   cart clears the whole loop + branches without stalling; if a spot stalls, raise booster density
   in `config/layout.toml [rail]`, or fall back to the datapack-driven cart along the route (D15).
 - **Ride tuning (engine model):** orientation (forward axis), scale, and offset vs the minecart.
-- **Spawn / station look**, mountain shape, coastline detail — adjust from screenshots.
+- ✅ **Station / island detailing** done (Phase 10, D19–D21): name signs, prop library (water towers,
+  footbridges, signal boxes, canopies, lamps, fencing, planters, phone boxes), built-out Brendam Docks,
+  enhanced Wellsworth, lush scattered trees, spawn welcome lectern/book. Remaining from screenshots:
+  mountain shape, coastline detail, and **in-game confirm the block-entity signs/book render** in 26.1.2
+  (else flip `[detailing].signs`/`.welcome` to `"text_display"`).
 - Confirm `clickEvent` menu format works in 26.1.2 (else adjust).
 
 ## Geography / coverage
