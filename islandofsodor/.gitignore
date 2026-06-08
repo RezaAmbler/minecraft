@@ -1,0 +1,28 @@
+# Generated build output (regenerable from source — never the source of truth)
+/build/
+/build2/
+*.zip
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Caches produced by the terrain/region pipeline
+/heightmaps/_cache/
+/.cache/
+
+# OS noise
+.DS_Store
+
+# Minecraft play-test outputs the user drops in the repo root (transient, not source)
+/latest.log
+/20*.json
+/*.txt
+
+# Large reference map inputs are kept (small) but never the rendered world.
+# (heightmaps/source/ is tracked; derived masks are tracked as build inputs.)

@@ -1,0 +1,86 @@
+# =============================================================================
+# Master coordinate system + location registry for the Island of Sodor.
+# Convention: Minecraft axes  +X = east, +Z = south, +Y = up.
+# The canon main line runs roughly EAST (Vicarstown / mainland) <-> WEST (Tidmouth coast).
+# Coordinates below are STUB placeholders, refined in Phase 2 from the source map.
+# =============================================================================
+
+# --- Named locations -------------------------------------------------------
+# (Top-level array: MUST come before any [table] header, or TOML nests it.)
+# type: terminus | junction | station | halt | docks | shed | branch_end | landmark
+# mvp = true  => required for the MVP gate (built in Phase 4).
+# Positions are kept in sync with src/rail/route.py (authoritative for rail/stations).
+locations = [
+  { key="tidmouth",        name="Tidmouth",            type="terminus",   line="main",      x=-1400, z=350, mvp=true  },
+  { key="knapford",        name="Knapford",            type="junction",   line="main",      x=-850,  z=430, mvp=true  },
+  { key="wellsworth",      name="Wellsworth",          type="junction",   line="main",      x=-250,  z=470, mvp=true  },
+  { key="maron",           name="Maron",               type="station",    line="main",      x=300,   z=440, mvp=true  },
+  { key="crovans_gate",    name="Crovan's Gate",       type="junction",   line="main",      x=800,   z=330, mvp=true  },
+  { key="vicarstown",      name="Vicarstown",          type="terminus",   line="main",      x=1150,  z=200, mvp=true  },
+  { key="brendam_docks",   name="Brendam Docks",       type="docks",      line="brendam",   x=-300,  z=720, mvp=true  },
+  { key="elsbridge",       name="Elsbridge",           type="station",    line="ffarquhar", x=-770,  z=580, mvp=false },
+  { key="ffarquhar",       name="Ffarquhar",           type="branch_end", line="ffarquhar", x=-700,  z=750, mvp=true  },
+  { key="sodor_steamworks", name="Sodor Steamworks",   type="landmark",   line="main",      x=860,   z=360, mvp=false },
+  { key="ulfstead_castle", name="Ulfstead Castle",     type="landmark",   line="none",      x=500,   z=600, mvp=false },
+  { key="blue_mountain",   name="Blue Mountain Quarry", type="landmark",  line="skarloey",  x=-100,  z=-450, mvp=false },
+]
+
+[world]
+name        = "Island of Sodor"
+seed        = 4440        # fixed for deterministic, reproducible generation
+sea_level   = 62
+min_y       = -64
+max_y       = 320
+ground_base = 64          # default land surface (just above sea level)
+
+[world.spawn]
+x = -850                  # at Knapford, the central hub station
+y = 70
+z = 430
+
+[world.border]            # hugs the generated island square so no void is reachable
+center_x = -200
+center_z = 250
+size     = 3300           # just inside the 3400-wide generated terrain square
+
+[map]                     # source-map -> world transform (Phase 2)
+source_image        = "heightmaps/source/sodor_railway_map.png"  # CC BY-SA 2.5 (see CREDITS)
+island_width_blocks = 3400  # E-W span of the island in blocks; N-S derived from map aspect
+# The island is fit (preserving aspect) centred on [world.border]; height follows the
+# extracted mask's aspect ratio, so blocks-per-pixel is implicit.
+
+[scale]                   # approx landmass bounding box (refined in Phase 2)
+west_x  = -1900
+east_x  =  1500
+north_z =  -700
+south_z =  1000
+
+# --- Line topology (ordered station keys; refined in Phase 3) ---------------
+[lines.main]
+# point-to-point in canon; Phase 3 closes it into a continuous kid-friendly loop.
+order = ["vicarstown", "crovans_gate", "kellsthorpe", "maron", "wellsworth", "crosby", "knapford", "tidmouth"]
+
+[lines.brendam]
+order = ["wellsworth", "brendam_docks"]
+
+[lines.ffarquhar]
+order = ["knapford", "elsbridge", "ffarquhar"]
+
+# --- Rail tuning (P3.7) — booster density + how closely the grid path tracks canon ---
+[rail]
+booster_every      = 4     # powered-rail spacing on straights (keeps a cart rolling)
+curve_exit_boost   = true  # extra boosters just past curves to recover lost momentum
+climb_base_boosters = 3     # boosters at the foot of each climb
+max_deviation      = 24    # max blocks the 4-connected grid path may stray from the canon line
+
+# --- Schematic structure registry (P4 polish) — stamped by src/structures from a .schem ---
+# Each entry's `builder` is the in-repo model (source of truth), exported to schematics/<schem>.schem
+# and replayed into the world at `anchor` (a station key) + `offset` [dx,dz], facing `facing`.
+[[structures]]
+key     = "thomas_statue"
+builder = "src.structures.statue:thomas_statue_blocks"
+schem   = "thomas_statue"
+anchor  = "knapford"         # the spawn station
+offset  = [0, -18]           # north of the platform, clear of the running line + station building
+facing  = "toward_spawn"     # turn Thomas's face toward the spawn point
+label   = "Thomas the Tank Engine"

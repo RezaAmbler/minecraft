@@ -1,0 +1,31 @@
+# =============================================================================
+# The classic 7-engine roster (North Western Railway).
+# `color`/`trim` are canonical-ish hex used by the Phase 7 resource pack textures.
+# `block_main`/`block_trim` are vanilla blocks for the BLOCKY STAND-IN body shown
+# before/without the resource pack. Detailed display-entity rig geometry (parts,
+# offsets, scales, rotations) is authored in Phase 5 under src/entities/.
+# =============================================================================
+
+# (Top-level array: MUST come before any [table] header, or TOML nests it.)
+# key    : datapack id / function + scoreboard tag stem (sodor:engines/summon/<key>)
+# number : NWR running number (shown on number plate)
+# type   : tank | tender | tram
+# face   : friendly face id for the Phase 7 face textures
+roster = [
+  { key="thomas", number=1, name="Thomas", type="tank",   wheels="0-6-0T",  color="#1E6BB8", color_name="NWR blue",     trim="#C0392B", block_main="light_blue_concrete", block_trim="red_concrete",    face="cheeky" },
+  { key="edward", number=2, name="Edward", type="tender", wheels="4-4-0",   color="#4F8FBF", color_name="blue",         trim="#C0392B", block_main="light_blue_concrete", block_trim="red_concrete",    face="kind"   },
+  { key="henry",  number=3, name="Henry",  type="tender", wheels="4-6-0",   color="#15643C", color_name="green",        trim="#C0392B", block_main="green_concrete",      block_trim="red_concrete",    face="gentle" },
+  { key="gordon", number=4, name="Gordon", type="tender", wheels="4-6-2",   color="#1B335E", color_name="express blue", trim="#C0392B", block_main="blue_concrete",       block_trim="red_concrete",    face="proud"  },
+  { key="james",  number=5, name="James",  type="tender", wheels="2-6-0",   color="#9B1B1B", color_name="red",          trim="#111111", block_main="red_concrete",        block_trim="black_concrete",  face="vain"   },
+  { key="percy",  number=6, name="Percy",  type="tank",   wheels="0-4-0ST", color="#2E7D32", color_name="green",        trim="#C0392B", block_main="green_concrete",      block_trim="red_concrete",    face="happy"  },
+  { key="toby",   number=7, name="Toby",   type="tram",   wheels="0-6-0T",  color="#6B4A2B", color_name="brown",        trim="#E2B007", block_main="brown_concrete",      block_trim="yellow_concrete", face="wise"   },
+]
+
+[defaults.ride]
+max_speed       = 8.0    # target blocks/sec (tuned during the Phase 5 ride prototype)
+teleport_smooth = 2      # display-entity teleport_duration (ticks) to de-jitter per-tick moves
+
+[defaults.rig]
+body_length = 7          # blocky stand-in body footprint (blocks); refined in Phase 5
+body_height = 4
+body_width  = 3

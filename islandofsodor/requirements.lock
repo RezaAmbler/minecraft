@@ -1,0 +1,17 @@
+# Exact transitive lock for a reproducible build environment.
+# Generated from `pip freeze` on Python 3.12.13 (macOS arm64), 2026-06-07.
+# Recreate with:  python3.12 -m venv .venv && ./.venv/bin/pip install -r requirements.lock
+amulet-core==1.9.40
+amulet-leveldb==1.0.6
+amulet-mutf8==1.0.7
+amulet-nbt==2.1.8
+amulet-rocksdb==1.0.4
+immutable-views==0.6.1
+lz4==4.4.5
+mcschematic==11.4.4
+nbtlib==2.0.4
+numpy==1.26.4
+pillow==12.2.0
+platformdirs==3.11.0
+portalocker==2.10.1
+PyMCTranslate==1.2.43

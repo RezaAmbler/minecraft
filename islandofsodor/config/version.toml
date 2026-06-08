@@ -1,0 +1,48 @@
+# =============================================================================
+# Minecraft version + pack format pins.  HARD CONSTRAINT (per the brief):
+# never hardcode these from memory. Values verified against minecraft.wiki +
+# PrismarineJS minecraft-data, 2026-06-07. RE-VERIFY before any release.
+#
+# DUAL TARGET (see docs/DECISIONS.md D14 + play-test findings):
+#   * WORLD SAVE is written at 1.21.8 (DataVersion 4440) because amulet-core 1.9.40
+#     cannot cleanly write a native 26.1 world. The family's client is 26.1.2, which
+#     UPGRADES the 4440 world on first load (region chunks upgrade cleanly — verified).
+#   * DATAPACK + RESOURCE PACK target the CLIENT (26.1.2): the client reads them directly,
+#     so their pack_format must match 26.1.2 (datapack 101, resource 84).
+# =============================================================================
+
+[target]                  # the WORLD save version (what amulet writes)
+patch        = "1.21.8"
+version_name = "1.21.8"   # -> level.dat  Data.Version.Name (MC upgrades to the client version)
+data_version = 4440       # -> level.dat  Data.Version.Id   (verified; PyMCTranslate maps 1.21.8->4439, real release is 4440)
+
+[target.amulet]
+platform     = "java"
+game_version = [1, 21, 8] # tuple for amulet set_version_block()
+
+[client]                  # the version the family actually runs (packs target this)
+patch        = "26.1.2"
+data_version = 4790
+
+[pack_format]             # for the datapack + resource pack (target the 26.1.2 CLIENT)
+datapack     = 101        # 26.1.2 datapack format (101.1)
+resourcepack = 84         # 26.1.2 resource pack format (84.0)
+datapack_minor     = 1
+resourcepack_minor = 0
+
+[reference]
+verified_on = "2026-06-07"
+# Full 1.21.x table (patch | data_version | datapack_fmt | resourcepack_fmt):
+#   1.21    3953  48  34
+#   1.21.1  3955  48  34
+#   1.21.2  4080  57  42
+#   1.21.3  4082  57  42
+#   1.21.4  4189  61  46
+#   1.21.5  4325  71  55
+#   1.21.6  4435  80  63
+#   1.21.7  4438  81  64
+#   1.21.8  4440  81  64   <== TARGET
+#   1.21.9  4554  88.0 69.0   (min_format/max_format minor-version system begins)
+#   1.21.10 4556  88.0 69.0
+#   1.21.11 4671  94.1 75.0   (last 1.x patch; a 26.x calendar line exists beyond)
+note_mcschematic = "mcschematic's newest JE 1.21 enum is JE_1_21_5; block states are identical across 1.21.x for our palette, so .schem metadata at 1.21.5 is fine. The WORLD DataVersion (4440) is set via level.dat + amulet, not mcschematic."
