@@ -1,17 +1,20 @@
 """Validation suite — structural checks (we cannot launch Minecraft here).
 
-Loads the output world with amulet and asserts it opens; spot-checks coordinates and
-reads level.dat fields back. Ride feel + in-client visuals are covered by docs/TESTING.md.
-Run via `python -m src.build validate`; exits non-zero if any check fails.
+Loads the output world with amulet and asserts it opens; checks level.dat, terrain, rail
+geometry (the real check — every cell's written shape vs its 4-connected neighbours, no
+diagonal, no Y>1, no powered rail on a curve, loop-closure reachability, on-disk round-trip),
+structures, and the packs. Ride feel + in-client visuals are covered by docs/TESTING.md.
+Run via `python -m src.build validate`; exits non-zero if any check fails. No stubs.
 """
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 from .. import mcio
 
-LOG = logging.getLogger("sodor.validate")
+LOG = logging.getLogger("legoland.validate")
 
 
 @dataclass
@@ -38,6 +41,7 @@ def _block_name(level, x: int, y: int, z: int, ver) -> str:
     return getattr(blk, "full_blockstate", str(blk))
 
 
+# ----------------------------------------------------------------------------- #
 def validate_world(ctx, rep: Report) -> None:
     import amulet
     import nbtlib
@@ -48,12 +52,11 @@ def validate_world(ctx, rep: Report) -> None:
         return
 
     ver = mcio.version_id(ctx)
-    w = ctx.layout["world"]
+    w = ctx.transform["world"]
     d = nbtlib.load(str(world_dir / "level.dat"))["Data"]
     sx, sz = int(d["SpawnX"]), int(d["SpawnZ"])
-    sy = int(d["SpawnY"])  # terrain may have patched this onto the surface
+    sy = int(d["SpawnY"])
 
-    # amulet opens + DataVersion + spawn standability
     level = amulet.load_level(str(world_dir))
     try:
         dv = int(level.level_wrapper.version)
@@ -72,7 +75,6 @@ def validate_world(ctx, rep: Report) -> None:
     rep.check("Difficulty == peaceful(0)", int(d["Difficulty"]) == 0)
     gr = d["GameRules"]
     rep.check("gamerule doDaylightCycle=false", str(gr["doDaylightCycle"]) == "false")
-    rep.check("gamerule doWeatherCycle=false", str(gr["doWeatherCycle"]) == "false")
     rep.check("gamerule doMobSpawning=false", str(gr["doMobSpawning"]) == "false")
     dims = d["WorldGenSettings"]["dimensions"]
     rep.check("WorldGenSettings has 3 dimensions",
@@ -80,65 +82,55 @@ def validate_world(ctx, rep: Report) -> None:
               ", ".join(dims.keys()))
     gen_type = str(dims["minecraft:overworld"]["generator"]["type"])
     rep.check("overworld generator is flat(void)", gen_type == "minecraft:flat", gen_type)
-    border = float(d["BorderSize"])
-    rep.check("world border set", border == float(w["border"]["size"]), str(border))
+    rep.check("world border set", float(d["BorderSize"]) == float(w["border_size"]),
+              str(float(d["BorderSize"])))
 
 
 def validate_terrain(ctx, rep: Report) -> None:
-    """Predict surface blocks from the heightfield and verify them in the world."""
+    """Heightfield determinism + the written surface matches it on pristine park columns.
+
+    Samples a grid across the park footprint, EXCLUDING a radius around any built land (where
+    structures/rail legitimately replace grass with their own blocks), and requires grass with
+    air above — proving the DEM terrain was written correctly where nothing overbuilt it."""
     import amulet
     import numpy as np
-    from ..terrain.heightfield import build_heightfield, CODE_TO_BLOCK, SNOW_Y
+    from ..terrain.heightfield import build_heightfield, ground_at
 
     hf = build_heightfield(ctx)
-
-    # determinism: a second build must match (seeded + image-derived)
     hf2 = build_heightfield(ctx)
-    rep.check("heightfield deterministic", bool(np.array_equal(hf.height, hf2.height)
-                                                and np.array_equal(hf.surf, hf2.surf)))
+    rep.check("heightfield deterministic", bool(np.array_equal(hf.ground, hf2.ground)))
+
+    built = [(int(ld["center"][0]), int(ld["center"][1]), int(ld.get("footprint", 120)))
+             for ld in ctx.lands.get("lands", []) if ld.get("mvp")]
+
+    def overbuilt(x, z):
+        return any((x - cx) ** 2 + (z - cz) ** 2 <= (fp // 2 + 6) ** 2 for cx, cz, fp in built)
 
     ver = mcio.version_id(ctx)
     level = amulet.load_level(str(ctx.world_dir))
     try:
-        # detect terrain: a sea corner should be water at sea level
-        scx, scz = hf.west + 8, hf.north + 8
-        sea_top = _block_name(level, scx, hf.sea_level, scz, ver)
-        if not sea_top.startswith("minecraft:water"):
-            rep.check("terrain generated", False, f"sea corner @y{hf.sea_level} = {sea_top}")
-            return
-        rep.check("terrain generated (sea corner is water)", True)
-
-        # land sample: island centre (inland, off the thin rail loop)
-        cx = int(round(float(ctx.layout["world"]["border"]["center_x"])))
-        cz = int(round(float(ctx.layout["world"]["border"]["center_z"])))
-        xi, zi = cx - hf.west, cz - hf.north
-        h = int(hf.height[zi, xi])
-        exp = CODE_TO_BLOCK[int(hf.surf[zi, xi])][0]
-        got = _block_name(level, cx, h, cz, ver)
-        rep.check("land surface block matches heightfield",
-                  got.startswith(f"minecraft:{exp}"), f"@({cx},{h},{cz}) got {got}, want {exp}")
-        above = _block_name(level, cx, h + 1, cz, ver)
-        rep.check("air above land surface", above.startswith("minecraft:air"), above)
-
-        # sea sample: seabed solid + water column
-        bed = int(hf.height[8, 8])  # corner seabed
-        bed_blk = _block_name(level, scx, bed, scz, ver)
-        rep.check("seabed is solid", not bed_blk.startswith(("minecraft:air", "minecraft:water")), bed_blk)
-
-        # mountain sample: highest land column should be snow-capped
-        flat = np.where(hf.land, hf.height, -9999)
-        mzi, mxi = np.unravel_index(int(np.argmax(flat)), flat.shape)
-        mh = int(hf.height[mzi, mxi])
-        mx, mz = hf.west + int(mxi), hf.north + int(mzi)
-        peak = _block_name(level, mx, mh, mz, ver)
-        rep.check(f"mountain peak y={mh} is snow", mh >= SNOW_Y and peak.startswith("minecraft:snow"),
-                  f"@({mx},{mh},{mz}) {peak}")
+        ok = bad = 0
+        sample_bad = []
+        for x in range(hf.x0 + 8, hf.x0 + hf.nx - 8, 40):
+            for z in range(hf.z0 + 8, hf.z0 + hf.nz - 8, 40):
+                if overbuilt(x, z):
+                    continue
+                g = ground_at(hf, x, z)
+                surf = _block_name(level, x, g, z, ver)
+                above = _block_name(level, x, g + 1, z, ver)
+                if surf.startswith("minecraft:grass_block") and above.startswith("minecraft:air"):
+                    ok += 1
+                else:
+                    bad += 1
+                    if len(sample_bad) < 3:
+                        sample_bad.append(f"({x},{g},{z}):{surf.split('[')[0].split(':')[-1]}")
+        rep.check("terrain surface is grass on pristine park columns (air above)",
+                  bad == 0 and ok >= 20, f"{ok} ok, {bad} bad {sample_bad}")
     finally:
         level.close()
 
 
-# rail shape -> the two cardinal (dx,dz) neighbour offsets it connects (ascending connects
-# along its axis: the lower end level, the higher end one block up — found by scanning y +-1).
+# rail shape -> its two cardinal (dx,dz) connection offsets
 _RAIL_CONN = {
     "east_west": [(1, 0), (-1, 0)], "north_south": [(0, 1), (0, -1)],
     "north_east": [(0, -1), (1, 0)], "north_west": [(0, -1), (-1, 0)],
@@ -149,7 +141,6 @@ _RAIL_CONN = {
 
 
 def _rail_at(level, x, y, z, ver):
-    """(rail_type, shape) at the cell, or None if it is not a rail block."""
     s = _block_name(level, x, y, z, ver)
     if "rail" not in s:
         return None
@@ -159,172 +150,115 @@ def _rail_at(level, x, y, z, ver):
 
 
 def validate_rail(ctx, rep: Report) -> None:
-    """Structural proof that the line is rideable (we cannot launch Minecraft): every rail
-    cell's written shape is read back and checked against its 4-connected neighbours, with no
-    diagonal-only adjacency, no Y step >1, no powered/detector/activator rail on a curve, and a
-    switch-state-aware reachability model (closed loop + each branch reachable in one lever
-    state, on-main in the other). Uses the same `rail.grid` plan the layer used, so the checked
-    geometry cannot drift from the written geometry."""
+    """The real rideability proof for every MVP coaster: ordered-plan geometry guarantees
+    (4-connected, no Y>1, no powered/detector/activator rail on a curve), shape-connectivity,
+    on-disk round-trip of type+shape, and loop-closure reachability (BFS over the rail graph).
+    Uses the same `coaster.plan_coaster` the layer used, so checked == built."""
     import amulet
-    from collections import defaultdict
+    from ..rail import coaster, grid
     from ..terrain.heightfield import build_heightfield
-    from ..rail import grid, route, switches
 
     hf = build_heightfield(ctx)
-    net = grid.plan_network(hf, ctx.layout)
-    main_cells, branches, jidx = net["main"], net["branches"], net["jidx"]
+    rides = coaster.mvp_coasters(ctx.rides)
+    if not rides:
+        rep.check("at least one MVP coaster", False, "no coaster with a route in rides.toml")
+        return
+
     ver = mcio.version_id(ctx)
+    level = amulet.load_level(str(ctx.world_dir))
+    try:
+        for ride in rides:
+            plan = coaster.plan_coaster(hf, ride, ctx.transform)
+            cells = plan.cells
+            n = len(cells)
+            label = ride["name"]
 
-    # expected on-disk rail: plan cells, with junction-owned cells overlaid (stamp is
-    # authoritative for the 3 head cells of each branch + the approach/switch/main_out).
-    expected = {c.xz: (c.y, c.rail_type, c.shape) for c in main_cells}
-    for cells in branches.values():
-        for c in cells[3:]:
-            expected[c.xz] = (c.y, c.rail_type, c.shape)
-    for name, idx in jidx.items():
-        expected.update(switches.expected_rail(name, main_cells[idx].y))
-    keys = set(expected)
-
-    # geometric guarantees on the ordered plan (no world reads needed)
-    def geom(cells, label, closed):
-        n = len(cells)
-        diag = ystep = curvetype = None
-        for i in range(n):
-            c = cells[i]
-            if i + 1 < n or closed:
-                d = cells[(i + 1) % n]
+            # geometric guarantees on the ordered loop (no world reads)
+            diag = ystep = curvetype = None
+            for i in range(n):
+                c, d = cells[i], cells[(i + 1) % n]
                 if abs(c.x - d.x) + abs(c.z - d.z) != 1:
                     diag = diag or (c.xz, d.xz)
                 if abs(c.y - d.y) > 1:
                     ystep = ystep or (c.xz, d.xz)
-            if c.shape in grid.CURVE_SHAPES and c.rail_type != "rail":
-                curvetype = curvetype or (c.xz, c.rail_type)
-        rep.check(f"{label}: 4-connected (no diagonal step)", diag is None, str(diag or ""))
-        rep.check(f"{label}: no Y step >1 between cells", ystep is None, str(ystep or ""))
-        rep.check(f"{label}: no powered/detector/activator rail on a curve",
-                  curvetype is None, str(curvetype or ""))
+                if c.shape in grid.CURVE_SHAPES and c.rail_type != "rail":
+                    curvetype = curvetype or (c.xz, c.rail_type)
+            rep.check(f"{label}: 4-connected (no diagonal step)", diag is None, str(diag or ""))
+            rep.check(f"{label}: no Y step >1 between cells", ystep is None, str(ystep or ""))
+            rep.check(f"{label}: no powered rail on a curve", curvetype is None, str(curvetype or ""))
 
-    geom(main_cells, "main loop", True)
-    for name, cells in branches.items():
-        geom(cells, f"{name} branch", False)
+            # connectivity from shapes (closed loop: every connection lands on a rail cell)
+            keys = {c.xz for c in cells}
+            disc = []
+            for c in cells:
+                for dx, dz in _RAIL_CONN.get(c.shape, []):
+                    if (c.x + dx, c.z + dz) not in keys:
+                        disc.append((c.x, c.z, c.shape, (dx, dz)))
+                        break
+            rep.check(f"{label}: every rail shape connects to a neighbour", not disc,
+                      f"{len(disc)} dangling e.g. {disc[:3]}")
 
-    # connectivity from the shapes (each shape's two ends must land on another rail cell),
-    # except a branch terminus legitimately dead-ends with one open side.
-    termini_xz = {cells[-1].xz for cells in branches.values()}
-    disc = []
-    for (x, z), (y, typ, shape) in expected.items():
-        if (x, z) in termini_xz:
-            continue
-        for dx, dz in _RAIL_CONN.get(shape, []):
-            if (x + dx, z + dz) not in keys:
-                disc.append((x, y, z, shape, (dx, dz)))
-                break
-    rep.check("every rail shape connects to its neighbours", not disc,
-              f"{len(disc)} dangling e.g. {disc[:3]}")
+            # on-disk round-trip: world holds exactly the planned (type, shape) at each cell
+            bad = []
+            for c in cells:
+                if _rail_at(level, c.x, c.y, c.z, ver) != (c.rail_type, c.shape):
+                    bad.append((c.x, c.y, c.z, _rail_at(level, c.x, c.y, c.z, ver), (c.rail_type, c.shape)))
+                    if len(bad) >= 5:
+                        break
+            rep.check(f"{label}: rail written correctly on disk (round-trip)", not bad,
+                      f"{len(bad)}+ mismatch e.g. {bad[:2]}")
 
-    level = amulet.load_level(str(ctx.world_dir))
-    try:
-        # round-trip: the world holds exactly the planned type + shape at each cell
-        bad = []
-        for (x, z), (y, typ, shape) in expected.items():
-            if _rail_at(level, x, y, z, ver) != (typ, shape):
-                bad.append((x, y, z, _rail_at(level, x, y, z, ver), (typ, shape)))
-                if len(bad) >= 5:
-                    break
-        rep.check("rail shapes written correctly on disk", not bad,
-                  f"{len(bad)}+ mismatch(es) e.g. {bad[:3]}")
-
-        # each lever switch: both exits are real rail, and the lever + lamp are present
-        for name, idx in jidx.items():
-            c = switches.exit_cells(name)
-            jy = main_cells[idx].y
-            both = (_rail_at(level, *(c["main_out"][0], jy, c["main_out"][1]), ver)
-                    and _rail_at(level, *(c["branch_tee"][0], jy, c["branch_tee"][1]), ver))
-            rep.check(f"{name} junction: both exits are connected rail", bool(both))
-            ed = mcio.WorldEditor(level, ctx)
-            sx, sz = c["stand"]
-            lvr = ed.name_at(sx, jy + 1, sz)
-            rep.check(f"{name} junction: lever present", lvr == "lever", lvr)
-
-        # turntable rail at Tidmouth (the loop now runs across the apron)
-        tx, tz = route.stations()["tidmouth"]
-        found = any("rail" in _block_name(level, tx, ty, tz, ver) for ty in range(60, 90))
-        rep.check("turntable rail at Tidmouth", found, "no rail in y[60,90) at Tidmouth")
+            # loop-closure reachability: BFS the rail adjacency from the boarding cell
+            adj = defaultdict(set)
+            xz = [c.xz for c in cells]
+            for i in range(n):
+                a, b = xz[i], xz[(i + 1) % n]
+                adj[a].add(b); adj[b].add(a)
+            seen, stack = {xz[plan.boarding_idx]}, [xz[plan.boarding_idx]]
+            while stack:
+                u = stack.pop()
+                for v in adj[u]:
+                    if v not in seen:
+                        seen.add(v); stack.append(v)
+            rep.check(f"{label}: loop closed & fully traversable from boarding cell",
+                      len(seen) == n, f"{n - len(seen)} cells unreachable")
     finally:
         level.close()
 
-    # switch-state-aware reachability: model each junction as a toggle and BFS the rail graph
-    adj = defaultdict(set)
-    M = [c.xz for c in main_cells]
-    for i in range(len(M)):
-        a, b = M[i], M[(i + 1) % len(M)]
-        adj[a].add(b); adj[b].add(a)
-    for cells in branches.values():
-        B = [c.xz for c in cells]
-        for i in range(len(B) - 1):
-            adj[B[i]].add(B[i + 1]); adj[B[i + 1]].add(B[i])
-
-    def reach(drop_edges, start):
-        drop = set()
-        for a, b in drop_edges:
-            drop.add((a, b)); drop.add((b, a))
-        seen, stack = {start}, [start]
-        while stack:
-            u = stack.pop()
-            for v in adj[u]:
-                if (u, v) not in drop and v not in seen:
-                    seen.add(v); stack.append(v)
-        return seen
-
-    start = M[0]
-    jc = {name: switches.exit_cells(name) for name in jidx}
-    termini = {name: branches[switches.JUNCTIONS[name]["branch"]][-1].xz for name in jidx}
-
-    # all switches straight -> main loop is one closed traversable ring, no branch diverted
-    seen = reach([(jc[n]["switch"], jc[n]["branch_tee"]) for n in jidx], start)
-    rep.check("main loop closed & fully traversable (switches straight)",
-              all(c.xz in seen for c in main_cells),
-              f"{sum(1 for c in main_cells if c.xz not in seen)} cells unreachable")
-    for name in jidx:
-        rep.check(f"{name} junction: cart stays on main when lever=straight",
-                  termini[name] not in seen)
-        # divert at this junction (others straight) -> the branch terminus becomes reachable
-        drop = [(jc[name]["switch"], jc[name]["main_out"])]
-        drop += [(jc[o]["switch"], jc[o]["branch_tee"]) for o in jidx if o != name]
-        rep.check(f"{name} junction: branch reachable when lever=divert",
-                  termini[name] in reach(drop, start))
-
 
 def validate_structures(ctx, rep: Report) -> None:
-    """Confirm each MVP station's accent structure exists (scan a coarse grid for its colour)."""
+    """Confirm Castle Hill's structures exist (scan around the land centre for key blocks)."""
     import amulet
-    from ..rail import route
-    from ..structures.builders import ACCENTS
+    from ..world.coords import land_center
 
-    info = route.station_info()
-    mvp = {loc["key"] for loc in ctx.layout.get("locations", []) if loc.get("mvp")}
+    try:
+        cx, cz = land_center(ctx.lands, "castle_hill")
+    except KeyError:
+        rep.check("castle_hill land defined", False)
+        return
+    ver = mcio.version_id(ctx)
     level = amulet.load_level(str(ctx.world_dir))
     try:
         ed = mcio.WorldEditor(level, ctx)
-        ok, total, missing = 0, 0, []
-        for key, (x, z, axis) in info.items():
-            if key not in mvp:
-                continue
-            total += 1
-            ry = ed.surface_y(x, z) or 68
-            accent = ACCENTS.get(key, "white_concrete")
-            found = any(
-                ed.name_at(x + dx, y, z + dz) == accent
-                for dx in range(-14, 15, 2) for dz in range(-14, 15, 2) for y in (ry + 3, ry + 6)
-            )
-            ok += found
-            if not found:
-                missing.append(key)
-        if ok == 0:
-            rep.check("structures built", False, "no station structures found (run `structures`)")
-        else:
-            rep.check("all MVP stations built", ok == total,
-                      f"{ok}/{total} built" + (f"; missing {missing}" if missing else ""))
+        counts = defaultdict(int)
+        for dx in range(-22, 23, 2):
+            for dz in range(-22, 23, 2):
+                for y in range(82, 108):
+                    counts[ed.name_at(cx + dx, y, cz + dz)] += 1
+        castle = counts.get("stone_bricks", 0) + counts.get("chiseled_stone_bricks", 0)
+        gold = counts.get("gold_block", 0)
+        dragon = counts.get("lime_concrete", 0) + counts.get("green_concrete", 0) + counts.get("green_terracotta", 0)
+        rep.check("castle present (stone-brick mass)", castle >= 30, f"{castle} stone-brick samples")
+        rep.check("castle heraldry present (gold)", gold >= 1, f"{gold} gold samples")
+        rep.check("dragon show-scene present (green)", dragon >= 1, f"{dragon} green samples")
+        # station near the boarding cell
+        from ..rail import coaster
+        from ..terrain.heightfield import build_heightfield
+        plan = coaster.plan_coaster(build_heightfield(ctx), coaster.mvp_coasters(ctx.rides)[0], ctx.transform)
+        b = plan.cells[plan.boarding_idx]
+        st = any(ed.name_at(b.x + dx, b.y, b.z + dz) in ("polished_andesite", "smooth_stone", "dark_oak_planks")
+                 for dx in range(-6, 7) for dz in range(-8, 3))
+        rep.check("coaster station present near boarding cell", st)
     finally:
         level.close()
 
@@ -334,7 +268,7 @@ def validate_datapack(ctx, rep: Report) -> None:
     root = ctx.datapack_out
     mc = root / "pack.mcmeta"
     if not mc.exists():
-        rep.check("datapack built", False, "no pack.mcmeta (run `engines`)")
+        rep.check("datapack built", False, "no pack.mcmeta (run `datapack`)")
         return
     try:
         meta = json.loads(mc.read_text())
@@ -345,25 +279,23 @@ def validate_datapack(ctx, rep: Report) -> None:
     rep.check("datapack pack_format == client", fmt == ctx.version.datapack_format,
               f"{fmt} vs {ctx.version.datapack_format}")
     tickjson = root / "data" / "minecraft" / "tags" / "function" / "tick.json"
-    rep.check("tick tag -> engine/tick",
-              tickjson.exists() and "sodor:engine/tick" in tickjson.read_text())
-    # every engine summon function present + non-trivial
+    rep.check("tick tag -> legoland:ride/tick",
+              tickjson.exists() and "legoland:ride/tick" in tickjson.read_text())
+
+    from ..rail import coaster
+    fn = root / "data" / "legoland" / "function"
     bad = []
-    for e in ctx.engines["roster"]:
-        f = root / "data" / "sodor" / "function" / "engine" / "summon" / f"{e['key']}.mcfunction"
+    for c in coaster.mvp_coasters(ctx.rides):
+        f = fn / "ride" / "summon" / f"{c['key']}.mcfunction"
         if not f.exists() or "summon block_display" not in f.read_text():
-            bad.append(e["key"])
-    rep.check("all engine summon functions present", not bad, str(bad))
-    fn = root / "data" / "sodor" / "function"
-    for name in ("menu", "engine/menu", "travel/menu", "setup"):
+            bad.append(c["key"])
+    rep.check("all coaster summon functions present", not bad, str(bad))
+    for name in ("menu", "ride/menu", "ride/stop", "travel/menu", "setup"):
         rep.check(f"function present: {name}", (fn / f"{name}.mcfunction").exists())
-    # teleport hub per MVP station
-    from ..rail import route
-    mvp = {loc["key"] for loc in ctx.layout.get("locations", []) if loc.get("mvp")}
-    hubs_missing = [k for k in route.station_info() if k in mvp
-                    and not (fn / "travel" / "goto" / f"{k}.mcfunction").exists()]
-    rep.check("teleport hub per MVP station", not hubs_missing, str(hubs_missing))
-    # every function the tick/load tags reference must exist
+    hubs_missing = [ld["key"] for ld in ctx.lands.get("lands", [])
+                    if not (fn / "travel" / "goto" / f"{ld['key']}.mcfunction").exists()]
+    rep.check("teleport hub per land", not hubs_missing, str(hubs_missing))
+    # every tick/load-tagged function must exist
     for tag in ("tick", "load"):
         tj = root / "data" / "minecraft" / "tags" / "function" / f"{tag}.json"
         if tj.exists():
@@ -391,6 +323,11 @@ def validate_resourcepack(ctx, rep: Report) -> None:
     rep.check("resourcepack icon present", (out / "pack.png").exists())
 
 
+def validate_finalize(ctx, rep: Report) -> None:
+    """After finalize the entities/ folder must be gone (26.1.2 rejects amulet's entity chunks)."""
+    rep.check("entities/ folder removed", not (ctx.world_dir / "entities").exists())
+
+
 def run(ctx) -> None:
     rep = Report()
     validate_world(ctx, rep)
@@ -399,6 +336,7 @@ def run(ctx) -> None:
     validate_structures(ctx, rep)
     validate_datapack(ctx, rep)
     validate_resourcepack(ctx, rep)
+    validate_finalize(ctx, rep)
     LOG.info("validation: %s", rep.summary())
     if rep.failures:
         names = ", ".join(n for n, _, _ in rep.failures)

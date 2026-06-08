@@ -6,6 +6,33 @@ D10/D11 world-creation, D14 26.1.2 compat, D16/D17 rail, D18 schematics) still a
 
 ---
 
+### LD11 · 2026-06-07 · Castle straddles the coaster (the train tunnels through it)
+**Decision:** Structures lay before rail (Sodor D16); the castle is placed so The Dragon's NE
+segment runs through a deliberately-hollow "tunnel band" (`castle.py` leaves dx 2..14 / dy 1..5
+open), and the rail layer carves its corridor through it last. The static dragon show-scene sits
+just west of that eastern track at rider eye-level.
+**Why:** Realises the real ride's indoor dark-ride-through-the-castle section without special-casing.
+**Consequences:** Castle origin/height are derived from the actual rail plan (structures import
+`coaster.plan_coaster`) so the band always contains the track.
+
+### LD10 · 2026-06-07 · Coaster elevation profile from waypoint Ys (not terrain-follow)
+**Decision:** `rail/coaster.py` builds each coaster's Y profile by interpolating the route
+waypoints' Y (lift hill, drops), then makes it vanilla-legal with the proven helpers
+(`_slope_limit`, corner-flatten, `_fix_valleys`) and lifts it to sit on/above terrain. Replaces
+Sodor's terrain-following `compute_profile` + `plan_network` (removed, along with `route.py`/
+`switches.py` and the green-mask `geography.py`/`source_map.py` and `statue.py`/`builders.py`).
+**Why:** A coaster's drama is its profile; terrain-follow gives a flat ride. Reuses `grid.cell_shape`
+etc. verbatim so geometry stays correct (validated: 0 diagonal / 0 Y>1 / 0 powered-on-curve).
+**Consequences:** The Dragon climbs Y88→92 then drops; one shared planner used by layer + rig +
+validator (no drift). 3-way lever switches return when a later coaster needs them.
+
+### LD9 · 2026-06-07 · Phase 1 generates the FULL-park terrain, builds only Castle Hill
+**Decision:** Terrain writes the whole ~500-block DEM hillside as grass (1088 chunks, ~1s) even
+though only Castle Hill gets structures/rail in Phase 1.
+**Why:** Avoids an isolated mesa with cliff edges; gives a coherent hill sloping toward the
+(future) lake, and the terrain code is already park-wide for Phase 2. The lake/paths are carved later.
+**Consequences:** `heightfield.water_y` is disabled in Phase 1 (no lake yet).
+
 ### LD8 · 2026-06-07 · Config schema = version + transform + lands + rides
 **Decision:** Replace Sodor's `layout.toml`/`engines.toml` with four theme-park config files:
 `version.toml` (unchanged), `transform.toml`, `lands.toml`, `rides.toml`; `src/config.py` gains

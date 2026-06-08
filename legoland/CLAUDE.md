@@ -5,9 +5,12 @@ California (Carlsbad). Sibling to `../islandofsodor` and built by reusing its pr
 pipeline (copy-and-adapt — see DECISIONS LD1).
 
 ## Current state (2026-06-07)
-Phase 0 complete: config + real USGS DEM references + compressed real-world→block transform.
-`python -m src.build info` runs; `python -m src.terrain.transform` emits a sane preview. Phase 1
-(Castle Hill full vertical slice) is next. See `BUILD_PLAN.md` for the live checklist.
+Phase 0 + Phase 1 (Castle Hill) complete through structural validation. `python -m src.build all`
+regenerates the world + datapack + resource pack in ~2s, **40/40 validation checks pass**, and the
+output is byte-reproducible. Castle Hill has DEM terrain, a blocky castle, The Dragon as a rideable
+coaster (display-entity train), and the kid-safe datapack menu. **NEXT: P1.9 human play-test gate**
+(load in 26.1.2, ride The Dragon, send `latest.log` — see `docs/TESTING.md`) before Phase 2. See
+`BUILD_PLAN.md` for the live checklist.
 
 ## Hard constraints — never hardcode from memory; values live in `config/` and are wiki-verified
 - **World save:** Java **1.21.8**, DataVersion **4440** (amulet output; the 26.1.2 client upgrades it

@@ -18,7 +18,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from . import route, switches
 from .pathing import _nbr_idx, compute_profile
 
 # direction unit vectors (layout.toml: +X=east, +Z=south)
@@ -233,66 +232,7 @@ def rail_cfg(layout: dict) -> dict:
     }
 
 
-# a junction needs a straight, level run through it (the switch cell must be straight and the
-# branch must depart perpendicular without the main line jogging onto the branch's cells).
-_JUNCTION_RUN = 4
-
-
-def _main_waypoints(layout: dict):
-    """Main-loop waypoints with a short straight run forced through each junction, aligned to
-    the station's track axis, so the switch geometry in `switches` is always realisable."""
-    sinfo = route.station_info()
-    wp = []
-    for key, x, z in route.MAIN_LOOP:
-        if key in switches.JUNCTIONS:
-            r = _JUNCTION_RUN
-            if sinfo[key][2] == "ew":
-                wp += [(x - r, z), (x, z), (x + r, z)]
-            else:
-                wp += [(x, z - r), (x, z), (x, z + r)]
-        else:
-            wp.append((x, z))
-    return wp
-
-
-def plan_network(hf, layout: dict) -> dict:
-    """Pure plan shared by the layer (Phase 3) and the validator: the resolved Cell lists for
-    the main loop and each branch, plus the main-path index of each junction."""
-    cfg = rail_cfg(layout)
-    md = cfg["max_deviation"]
-
-    main_wp = _main_waypoints(layout)
-    main_xz = grid_path(main_wp, closed=True, max_dev=md)
-    main_corners = corner_indices(main_xz, closed=True)
-    n = len(main_xz)
-
-    jidx = {name: main_xz.index(tuple(info["switch_xz"]))
-            for name, info in switches.JUNCTIONS.items()
-            if tuple(info["switch_xz"]) in main_xz}
-    flat_extra = set()
-    for idx in jidx.values():
-        flat_extra.update((idx + d) % n for d in (-1, 0, 1))
-
-    main_ys = compute_profile(hf, main_xz, main_corners | flat_extra, closed=True)
-    main_rt = plan_rail_types(main_xz, main_ys, main_corners, True, cfg,
-                              junction_idx=set(jidx.values()))
-    main_cells = classify_cells(main_xz, main_ys, main_rt, closed=True)
-
-    branch_jy = {info["branch"]: main_cells[jidx[name]].y
-                 for name, info in switches.JUNCTIONS.items() if name in jidx}
-
-    branches = {}
-    for name in route.BRANCHES:
-        bwp = [(x, z) for _, x, z in route.BRANCHES[name]]
-        bxz = grid_path(bwp, closed=False, max_dev=md)
-        bcorners = corner_indices(bxz, closed=False)
-        anchors, bflat = {}, set(bcorners)
-        jy = branch_jy.get(name)
-        if jy is not None and len(bxz) >= 2:
-            anchors = {0: jy, 1: jy}
-            bflat |= {0, 1}
-        bys = compute_profile(hf, bxz, bflat, closed=False, anchors=anchors)
-        brt = plan_rail_types(bxz, bys, bcorners, False, cfg)
-        branches[name] = classify_cells(bxz, bys, brt, closed=False)
-
-    return {"main": main_cells, "branches": branches, "jidx": jidx, "cfg": cfg}
+# NOTE: the whole-network planner (main loop + branches + lever switches) lives in
+# `rail.coaster.plan_coaster` for LEGOLAND — each coaster is its own closed loop. Sodor's
+# multi-branch `plan_network` (with `route`/`switches`) was removed; 3-way splits with lever
+# switches return when a later coaster needs them (then re-add a switches module).
