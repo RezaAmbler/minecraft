@@ -10,11 +10,14 @@ ascend; an ascending cell cannot sit at the bottom of a one-cell dip).
 from __future__ import annotations
 
 
+_FALLBACK_Y = 64  # off-map columns: a sane default ground height
+
+
 def _terrain_y(hf, x: int, z: int) -> int:
-    xi, zi = x - hf.west, z - hf.north
-    if 0 <= xi < hf.size and 0 <= zi < hf.size and hf.land[zi, xi]:
-        return int(hf.height[zi, xi])
-    return hf.sea_level + 1  # over water/off-map -> causeway just above sea
+    xi, zi = x - hf.x0, z - hf.z0
+    if 0 <= xi < hf.nx and 0 <= zi < hf.nz:
+        return int(hf.ground[zi, xi])
+    return _FALLBACK_Y  # off the park footprint
 
 
 def _nbr_idx(n: int, i: int, closed: bool):
@@ -76,7 +79,7 @@ def compute_profile(hf, path, flat_idx=frozenset(), closed: bool = False,
     if n == 0:
         return []
     anchors = anchors or {}
-    base = [max(_terrain_y(hf, x, z), hf.sea_level + 2) for x, z in path]
+    base = [_terrain_y(hf, x, z) for x, z in path]
 
     # moving-average smoothing (wrap on a closed loop)
     sm = []

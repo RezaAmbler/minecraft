@@ -19,10 +19,10 @@ Phased, checkbox-driven. Flip `- [ ]` → `- [x]` in the SAME COMMIT as the work
 ## Phase 1 — CASTLE HILL: full vertical slice
 *Prove the entire pipeline on ONE land. Exit: Castle Hill terrain + castle + The Dragon coaster
 generate, validate, and package; **HUMAN PLAY-TEST GATE** before Phase 2.*
-- [ ] P1.1 Terrain (compressed) for Castle Hill — adapt `src/terrain` to consume the transform + DEM (replace Sodor green-mask). Vertical exaggeration so the hill reads. Heightfield determinism check.
-- [ ] P1.2 World foundation — adapt `src/world` (level.dat via nbtlib, DV 4440, Creative + kid-safe gamerules, void gen, spawn near Castle Hill). amulet opens cleanly.
-- [ ] P1.3 Structures BEFORE rail — adapt `src/structures`: castle (towers/gatehouse/walls, minifig palette) + Dragon station/queue as code models; export `.schem` (mtime=0); terrain-aware flatten leaves the coaster corridor intact.
-- [ ] P1.4 The Dragon as a rail coaster — adapt `src/rail`: route→4-connected grid→neighbour-derived shapes→booster planner (straights/climbs only)→boarding cell. Reuse `rail/grid.py cell_shape()`. No diagonals, max Y±1.
+- [x] P1.1 Terrain (compressed) for Castle Hill — adapt `src/terrain` to consume the transform + DEM (replace Sodor green-mask). Vertical exaggeration so the hill reads. Heightfield determinism check.
+- [x] P1.2 World foundation — adapt `src/world` (level.dat via nbtlib, DV 4440, Creative + kid-safe gamerules, void gen, spawn near Castle Hill). amulet opens cleanly.
+- [x] P1.3 Structures BEFORE rail — adapt `src/structures`: castle (towers/gatehouse/walls, minifig palette) + Dragon station/queue as code models; export `.schem` (mtime=0); terrain-aware flatten leaves the coaster corridor intact.
+- [x] P1.4 The Dragon as a rail coaster — adapt `src/rail`: route→4-connected grid→neighbour-derived shapes→booster planner (straights/climbs only)→boarding cell. Reuse `rail/grid.py cell_shape()`. No diagonals, max Y±1.
 - [ ] P1.5 Datapack runtime — adapt `src/datapack`+`src/entities`: kid-safe load setup; summon The Dragon display-entity rig bound to a ridden minecart via per-tick `tp`; clickable `/function legoland:menu`. Prototype this ONE rig end-to-end.
 - [ ] P1.6 Theming — Castle Hill palette, themed queue/station, a cheap visual-motion accent; resource pack pack.mcmeta (84.0) + icon.
 - [ ] P1.7 Validation (REAL validator) — adapt `src/validate`: rail per-cell shape vs neighbours, no diagonal, no Y>1, no powered rail on curves, switch-state reachability, on-disk round-trip; world/DataVersion/spawn/pack-JSON. No stubs.

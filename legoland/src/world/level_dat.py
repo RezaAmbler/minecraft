@@ -83,11 +83,12 @@ def _dimensions() -> Compound:
 
 def build_level_dat(ctx, spawn: tuple[int, int, int] | None = None) -> nbtlib.File:
     v = ctx.version
-    w = ctx.layout["world"]
+    w = ctx.transform["world"]
     sp = w["spawn"]
-    spawn = spawn if spawn is not None else (int(sp["x"]), int(sp["y"]), int(sp["z"]))
+    spawn = spawn if spawn is not None else (int(sp[0]), int(sp[1]), int(sp[2]))
     spawn = {"x": spawn[0], "y": spawn[1], "z": spawn[2]}
-    border = w["border"]
+    bcx, bcz = w["border_center"]
+    border = {"center_x": int(bcx), "center_z": int(bcz), "size": int(w["border_size"])}
     dv = int(v.data_version)
 
     gamerules = Compound({k: String(val) for k, val in KID_SAFE_GAMERULES.items()})
@@ -100,7 +101,7 @@ def build_level_dat(ctx, spawn: tuple[int, int, int] | None = None) -> nbtlib.Fi
             "Id": Int(dv), "Name": String(v.version_name),
             "Snapshot": Byte(0), "Series": String("main"),
         }),
-        "LevelName": String(w["name"]),
+        "LevelName": String(w["world_name"]),
         "initialized": Byte(1),
         "LastPlayed": Long(0),                        # fixed (0) for reproducible output
         "DataVersionTag": Int(dv),                    # harmless extra; ignored by MC

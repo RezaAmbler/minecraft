@@ -17,9 +17,9 @@ PLATFORM_HALF = 12  # 25x25 grass platform centred on spawn
 
 
 def build_spawn_platform(ctx) -> None:
-    """A small grass platform under spawn (overwritten later by Phase 2 terrain)."""
-    w = ctx.layout["world"]
-    sx, sy, sz = int(w["spawn"]["x"]), int(w["spawn"]["y"]), int(w["spawn"]["z"])
+    """A small grass platform under spawn (overwritten later by the terrain phase)."""
+    sp = ctx.transform["world"]["spawn"]
+    sx, sy, sz = int(sp[0]), int(sp[1]), int(sp[2])
     top = sy - 1  # block the player stands on
     ver = mcio.version_id(ctx)
     grass = mcio.block("grass_block", {"snowy": _str("false")})
@@ -69,8 +69,8 @@ def find_ground_spawn(ctx) -> tuple[int, int, int]:
     """Scan the finished world for grass near the configured spawn (off the track)."""
     import amulet
 
-    sx = int(ctx.layout["world"]["spawn"]["x"])
-    sz = int(ctx.layout["world"]["spawn"]["z"])
+    sp = ctx.transform["world"]["spawn"]
+    sx, sz = int(sp[0]), int(sp[2])
     ver = mcio.version_id(ctx)
     level = amulet.load_level(str(ctx.world_dir))
     try:

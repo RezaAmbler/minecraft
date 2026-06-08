@@ -1,9 +1,8 @@
-"""Phase 2 — Terrain.
+"""Terrain phase — write the park heightfield into the world.
 
-Builds the heightfield (heightfield.py) then writes the island into the world with a fast,
-vectorized chunk writer: each block type is translated to universal ONCE, then per-chunk
-numpy sub-chunk arrays are filled from heightfield slices. Region-batched (save+purge),
-logged, and resumable. Performance validated in P2.3 (~ms/chunk; full island ~1-2 min).
+Fast, vectorized chunk writer: each material is translated to a universal block ONCE, then
+per-chunk numpy [x, y, z] volumes are filled from heightfield slices. Region-batched
+(save+purge) and resumable. The heightfield is the compressed real DEM (heightfield.py).
 """
 from __future__ import annotations
 
@@ -15,14 +14,13 @@ import numpy as np
 from .. import mcio
 from . import heightfield as hfmod
 
-LOG = logging.getLogger("sodor.terrain")
+LOG = logging.getLogger("legoland.terrain")
 DIM = mcio.DIMENSION
-SAVE_EVERY = 1024            # chunks between save+purge (bounds memory)
-PROGRESS_FILE = ".sodor_terrain_progress"
+SAVE_EVERY = 1024
+PROGRESS_FILE = ".legoland_terrain_progress"
 
 
 def _universal_blocks(level):
-    """Translate each terrain block type to a universal Block exactly once."""
     import amulet_nbt
     tr = level.translation_manager.get_version("java", (1, 21, 8)).block
     U = {}
@@ -33,50 +31,47 @@ def _universal_blocks(level):
 
 
 def _fill_chunk(level, hf, U, cx, cz) -> bool:
-    """Fill one chunk from the heightfield. Returns False if fully outside the region."""
+    """Fill one chunk from the heightfield. Returns False if fully outside the park."""
     ox, oz = cx * 16, cz * 16
-    hx0, hz0 = ox - hf.west, oz - hf.north
-    lx0, lx1 = max(0, -hx0), min(16, hf.size - hx0)
-    lz0, lz1 = max(0, -hz0), min(16, hf.size - hz0)
+    hx0, hz0 = ox - hf.x0, oz - hf.z0
+    lx0, lx1 = max(0, -hx0), min(16, hf.nx - hx0)
+    lz0, lz1 = max(0, -hz0), min(16, hf.nz - hz0)
     if lx1 <= lx0 or lz1 <= lz0:
-        return False  # entirely outside the generated square
+        return False
 
-    # local [z,x] arrays (air/void outside the overlap)
-    Hc = np.zeros((16, 16), np.int16)
-    surfc = np.full((16, 16), hfmod.AIR, np.uint8)
-    landc = np.zeros((16, 16), bool)
-    Hc[lz0:lz1, lx0:lx1] = hf.height[hz0 + lz0:hz0 + lz1, hx0 + lx0:hx0 + lx1]
-    surfc[lz0:lz1, lx0:lx1] = hf.surf[hz0 + lz0:hz0 + lz1, hx0 + lx0:hx0 + lx1]
-    landc[lz0:lz1, lx0:lx1] = hf.land[hz0 + lz0:hz0 + lz1, hx0 + lx0:hx0 + lx1]
-    has_terrain = surfc != hfmod.AIR
-    if not has_terrain.any():
+    # local [z, x] surface height; present mask = inside the park footprint
+    present = np.zeros((16, 16), bool)
+    Hc = np.full((16, 16), hfmod.FLOOR_Y, np.int16)
+    present[lz0:lz1, lx0:lx1] = True
+    Hc[lz0:lz1, lx0:lx1] = hf.ground[hz0 + lz0:hz0 + lz1, hx0 + lx0:hx0 + lx1]
+    if not present.any():
         return False
 
     ch = level.create_chunk(cx, cz, DIM)
     pal = {code: ch.block_palette.get_add_block(b) for code, b in U.items()}
-    surf_pal = np.full((16, 16), pal[hfmod.AIR], np.uint32)
-    for code in (hfmod.GRASS, hfmod.SAND, hfmod.STONE, hfmod.SNOW, hfmod.GRAVEL):
-        surf_pal[surfc == code] = pal[code]
 
-    # transpose to [x,z]; build a [x, y, z] volume over [BASE_Y, top)
-    Hx = Hc.T[:, None, :]
-    landx = landc.T[:, None, :]
-    surf3 = surf_pal.T[:, None, :]
-    top = int(min(hfmod.YMAX, ((max(int(Hc.max()), hf.sea_level) + 16) // 16) * 16))
-    yspan = top - hfmod.BASE_Y
-    absy = np.arange(hfmod.BASE_Y, top, dtype=np.int16)[None, :, None]
+    top = int(max(Hc.max(), hf.water_y)) + 1            # exclusive top
+    yspan = top - hfmod.FLOOR_Y
+    absy = np.arange(hfmod.FLOOR_Y, top, dtype=np.int16)[None, :, None]   # [1, y, 1]
+    Hx = Hc.T[:, None, :]                                # [x, 1, z]
+    presentx = present.T[:, None, :]
 
     vol = np.full((16, yspan, 16), pal[hfmod.AIR], np.uint32)
-    below = absy < Hx
-    vol = np.where(below, pal[hfmod.STONE], vol)                         # solid base (land & seabed)
-    vol = np.where(landx & (absy >= Hx - 3) & below, pal[hfmod.DIRT], vol)  # land subsoil
-    vol = np.where(absy == Hx, surf3, vol)                              # land top / sea seabed
-    vol = np.where((~landx) & (absy > Hx) & (absy <= hf.sea_level),
-                   pal[hfmod.WATER], vol)                               # sea water column
+    solid = presentx & (absy <= Hx)
+    vol = np.where(solid, pal[hfmod.STONE], vol)                         # stone slab up to surface
+    vol = np.where(solid & (absy > Hx - hfmod.SUBSOIL) & (absy < Hx),
+                   pal[hfmod.DIRT], vol)                                 # dirt subsoil under grass
+    vol = np.where(presentx & (absy == Hx), pal[hfmod.GRASS], vol)       # grass surface
+    if hf.water_y >= hfmod.FLOOR_Y:                                      # optional lake fill
+        vol = np.where(presentx & (absy > Hx) & (absy <= hf.water_y),
+                       pal[hfmod.WATER], vol)
 
     air = pal[hfmod.AIR]
-    for cy in range(hfmod.BASE_Y // 16, top // 16):
-        sub = vol[:, cy * 16 - hfmod.BASE_Y: cy * 16 - hfmod.BASE_Y + 16, :]
+    for cy in range(hfmod.FLOOR_Y // 16, (top + 15) // 16):
+        y_lo = cy * 16 - hfmod.FLOOR_Y
+        sub = vol[:, y_lo:y_lo + 16, :]
+        if sub.shape[1] < 16:                            # pad the top sub-chunk to 16 high
+            sub = np.concatenate([sub, np.full((16, 16 - sub.shape[1], 16), air, np.uint32)], axis=1)
         if not (sub != air).any():
             continue
         ch.blocks.add_sub_chunk(cy, np.ascontiguousarray(sub))
@@ -87,8 +82,8 @@ def _fill_chunk(level, hf, U, cx, cz) -> bool:
 
 def run(ctx) -> None:
     hf = hfmod.build_heightfield(ctx)
-    cx_min, cx_max = hf.west // 16, (hf.west + hf.size - 1) // 16
-    cz_min, cz_max = hf.north // 16, (hf.north + hf.size - 1) // 16
+    cx_min, cx_max = hf.x0 // 16, (hf.x0 + hf.nx - 1) // 16
+    cz_min, cz_max = hf.z0 // 16, (hf.z0 + hf.nz - 1) // 16
     total = (cx_max - cx_min + 1) * (cz_max - cz_min + 1)
     LOG.info("generating %d chunks: cx[%d..%d] cz[%d..%d]", total, cx_min, cx_max, cz_min, cz_max)
 
@@ -98,8 +93,7 @@ def run(ctx) -> None:
         start_cz = int(progress_path.read_text().strip() or cz_min) + 1
         LOG.info("resuming at cz=%d", start_cz)
 
-    written = 0
-    done = 0
+    written = done = 0
     t0 = time.time()
     with mcio.open_level(ctx, save=False) as level:
         U = _universal_blocks(level)
@@ -112,19 +106,18 @@ def run(ctx) -> None:
                     level.save()
                     level.purge()
             progress_path.write_text(str(cz))
-            if (cz - cz_min) % 16 == 0:
+            if (cz - cz_min) % 8 == 0:
                 pct = 100 * (cz - cz_min + 1) / (cz_max - cz_min + 1)
-                LOG.info("  …cz=%d (%.0f%%), %d chunks written, %.1fs",
-                         cz, pct, written, time.time() - t0)
+                LOG.info("  …cz=%d (%.0f%%), %d chunks, %.1fs", cz, pct, written, time.time() - t0)
         level.save()
     if progress_path.exists():
         progress_path.unlink()
 
-    # put spawn on the terrain surface at the spawn column (kid lands on ground, not in a hill)
-    sp = ctx.layout["world"]["spawn"]
-    xi, zi = int(sp["x"]) - hf.west, int(sp["z"]) - hf.north
-    if 0 <= xi < hf.size and 0 <= zi < hf.size and hf.land[zi, xi]:
+    # land spawn on the terrain surface at the spawn column
+    sp = ctx.transform["world"]["spawn"]
+    g = hfmod.ground_at(hf, int(sp[0]), int(sp[2]))
+    if g is not None:
         from ..world.level_dat import patch_spawn_y
-        patch_spawn_y(ctx, int(hf.height[zi, xi]) + 1)  # feet on top of the surface block
+        patch_spawn_y(ctx, g + 1)
 
-    LOG.info("Phase 2 terrain complete: %d chunks written in %.1fs", written, time.time() - t0)
+    LOG.info("terrain complete: %d chunks written in %.1fs", written, time.time() - t0)

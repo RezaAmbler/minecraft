@@ -1,108 +1,87 @@
-"""Phase 4 — Structures.
+"""Structures phase — build Castle Hill's structures BEFORE the rail is laid.
 
-Builds the MVP station complexes at their route positions: a generic platform+building
-station for most stops, Tidmouth's engine shed (roundhouse) by its turntable, and Brendam's
-dock pier. Each gets a distinct accent colour + lit marker for kid navigation.
+Phase 1 places the medieval castle (so The Dragon coaster tunnels through it — the indoor
+dark-ride section), a static dragon show-scene beside the track, and the coaster station at
+the boarding point. Structures run before rail so the rail layer carves its corridor last and
+the line is never buried (DECISIONS LD1 / Sodor D16). Block models come from `castle.py`.
 """
 from __future__ import annotations
 
-import importlib
 import logging
 import time
 
 from .. import mcio
-from . import builders
+from ..rail import coaster
+from ..terrain.heightfield import build_heightfield, ground_at
+from . import castle
 
-LOG = logging.getLogger("sodor.structures")
-
-
-def resolve_placement(ctx, entry: dict):
-    """(base_x, base_z, facing) for a `[[structures]]` entry — anchored to a station + offset,
-    with `facing='toward_spawn'` resolved to the cardinal that turns the model toward spawn.
-    Shared by the placement loop here and the datapack nameplate."""
-    from ..rail import route
-    ax, az = route.stations()[entry["anchor"]]
-    ox, oz = entry.get("offset", [0, 0])
-    bx, bz = ax + ox, az + oz
-    facing = entry.get("facing", "south")
-    if facing == "toward_spawn":
-        sx = int(ctx.layout["world"]["spawn"]["x"])
-        sz = int(ctx.layout["world"]["spawn"]["z"])
-        dx, dz = sx - bx, sz - bz
-        facing = ("east" if dx > 0 else "west") if abs(dx) >= abs(dz) else ("south" if dz > 0 else "north")
-    return bx, bz, facing
+LOG = logging.getLogger("legoland.structures")
 
 
-def _place_registry(ctx, ed) -> None:
-    """Stamp each `[[structures]]` schematic entry: build its model (source of truth), export
-    the reusable .schem, then replay it into the world on a flattened foundation. Guards
-    against burying the running line."""
-    sea = int(ctx.layout["world"]["sea_level"])
-    for entry in ctx.layout.get("structures", []):
-        mod_name, fn_name = entry["builder"].split(":")
-        mod = importlib.import_module(mod_name)
-        bx, bz, facing = resolve_placement(ctx, entry)
-        blocks = getattr(mod, fn_name)(facing)
-        ry = ed.surface_y(bx, bz) or (sea + 6)
-
-        xs = [bx + dx for dx, dy, dz, *_ in blocks]
-        zs = [bz + dz for dx, dy, dz, *_ in blocks]
-        x0, x1, z0, z1 = min(xs), max(xs), min(zs), max(zs)
-        if any("rail" in ed.name_at(x, y, z)
-               for x in range(x0, x1 + 1) for z in range(z0, z1 + 1) for y in (ry, ry + 1)):
-            LOG.warning("registry %s footprint overlaps rail near (%d,%d) — skipping", entry["key"], bx, bz)
-            continue
-
-        for x in range(x0, x1 + 1):           # foundation + clear headroom
-            for z in range(z0, z1 + 1):
-                for yy in range(ry - 4, ry):
-                    ed.set(x, yy, z, "stone")
-                for yy in range(ry + 1, ry + 14):
-                    ed.set(x, yy, z, "air")
-        for dx, dy, dz, blk, props in blocks:
-            ed.set(bx + dx, ry + dy, bz + dz, blk, props)
-
-        if hasattr(mod, "export_schem"):
-            mod.export_schem("schematics", entry.get("schem", entry["key"]))
-        LOG.info("placed registry %s at (%d,%d) ry=%d facing=%s (%d blocks)",
-                 entry["key"], bx, bz, ry, facing, len(blocks))
+def _flatten(ed, x0, x1, z0, z1, top_y, clear=22, found=6):
+    """Grass pad at top_y with a stone foundation below and headroom cleared above."""
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            ed.set(x, top_y, z, "grass_block", {"snowy": "false"})
+            for yy in range(top_y - 1, top_y - found, -1):
+                ed.set(x, yy, z, "stone")
+            for yy in range(top_y + 1, top_y + clear):
+                ed.set(x, yy, z, "air")
 
 
-def _marker(ed, x, z, ry, accent):
-    floor = ry + 1
-    ed.set(x, ry, z, accent)
-    for up in range(1, 9):
-        ed.set(x, floor + up, z, accent)
-    ed.set(x, floor + 9, z, "glowstone")
+def _stamp(ed, blocks, ox, oy, oz):
+    for dx, dy, dz, blk, props in blocks:
+        ed.set(ox + dx, oy + dy, oz + dz, blk, props)
+
+
+def _cell_near(plan, x, z):
+    return min(plan.cells, key=lambda c: (c.x - x) ** 2 + (c.z - z) ** 2)
 
 
 def run(ctx) -> None:
-    from ..rail import route
-    info = route.station_info()
-    mvp = {loc["key"] for loc in ctx.layout.get("locations", []) if loc.get("mvp")}
+    hf = build_heightfield(ctx)
+    rides = coaster.mvp_coasters(ctx.rides)
+    if not rides:
+        LOG.warning("no MVP coaster route — skipping Castle Hill structures")
+        return
+    dragon_ride = rides[0]
+    plan = coaster.plan_coaster(hf, dragon_ride, ctx.transform)
+    board = plan.cells[plan.boarding_idx]
+
+    # Castle origin: centred on the coaster's NE segment so the tunnel band (dx 2..14) wraps
+    # the eastern track and the gatehouse (west) faces the station. dy band 1..5 must contain
+    # the rail Y there, so anchor origin_y so band top (origin_y+5) >= local rail max.
+    cox, coz = 84, -110
+    east_cell = _cell_near(plan, cox + 12, coz)         # rail in the tunnel band
+    co_y = east_cell.y - 1                               # band dy 1..5 -> rail at origin_y+1..+5
+    fx0, fx1, fz0, fz1 = (cox + castle.CASTLE_FOOTPRINT[0], cox + castle.CASTLE_FOOTPRINT[1],
+                          coz + castle.CASTLE_FOOTPRINT[2], coz + castle.CASTLE_FOOTPRINT[3])
 
     t0 = time.time()
-    built = []
     with mcio.open_level(ctx) as level:
         ed = mcio.WorldEditor(level, ctx)
-        for key, (x, z, axis) in info.items():
-            if key not in mvp:
-                continue
-            ry = ed.surface_y(x, z) or (int(ctx.layout["world"]["sea_level"]) + 6)
-            accent = builders.ACCENTS.get(key, "white_concrete")
-            if key == "tidmouth":
-                builders.build_roundhouse(ed, x, z, ry, axis)
-                _marker(ed, x + (0 if axis == "ew" else 12), z + (12 if axis == "ew" else 0), ry, accent)
-            elif key == "brendam_docks":
-                builders.build_docks(ed, x, z, ry, axis)
-            else:
-                builders.build_station(ed, x, z, ry, axis, accent)
-            built.append(key)
-            level.save()
-            level.purge()
-            ed.invalidate_cache()
-            LOG.info("built %s @ (%d,%d) ry=%d (%s)", key, x, z, ry, axis)
-        _place_registry(ctx, ed)
+
+        # Castle (flatten pad first so towers/walls sit on a level foundation)
+        _flatten(ed, fx0, fx1, fz0, fz1, co_y, clear=26, found=8)
+        _stamp(ed, castle.castle_blocks(), cox, co_y, coz)
+        LOG.info("castle stamped at (%d,%d) origin_y=%d (%d blocks)",
+                 cox, coz, co_y, len(castle.castle_blocks()))
+
+        # Dragon show-scene: just WEST of the eastern track, at rail eye-level, body -> track.
+        dcell = _cell_near(plan, cox + 12, coz - 2)
+        dragon_w = castle.DRAGON_FOOTPRINT[1] - castle.DRAGON_FOOTPRINT[0]
+        dox, doy, doz = dcell.x - dragon_w, dcell.y, dcell.z
+        _stamp(ed, castle.dragon_blocks(), dox, doy, doz)
+        LOG.info("dragon stamped at (%d,%d) y=%d (%d blocks)", dox, doz, doy, len(castle.dragon_blocks()))
+
+        # Station at the boarding cell: platform flush with the rail, north of the track.
+        sox, soy, soz = board.x, board.y - 1, board.z
+        sfx0, sfx1 = sox + castle.STATION_FOOTPRINT[0], sox + castle.STATION_FOOTPRINT[1]
+        sfz0, sfz1 = soz + castle.STATION_FOOTPRINT[2], soz + castle.STATION_FOOTPRINT[3]
+        _flatten(ed, sfx0, sfx1, sfz0, sfz1, soy, clear=12, found=6)
+        _stamp(ed, castle.station_blocks(), sox, soy, soz)
+        LOG.info("station stamped at boarding (%d,%d) origin_y=%d (%d blocks)",
+                 sox, soz, soy, len(castle.station_blocks()))
+
         level.save()
-    LOG.info("Phase 4 structures complete: %d stations + %d registry in %.1fs",
-             len(built), len(ctx.layout.get("structures", [])), time.time() - t0)
+    LOG.info("structures complete in %.1fs", time.time() - t0)

@@ -56,6 +56,17 @@ seed       = 4790       # fixed -> deterministic terrain noise (client DataVersi
 # World border hugs the park footprint (centre + size in blocks). Size padded over ~520.
 border_center = [0, 0]
 border_size   = 620
+# Spawn: near Castle Hill (Phase 1 play-test starts here). Y is approximate; the finalize
+# phase snaps it to the terrain surface (find_ground_spawn).
+spawn = [75, 90, -110]
+
+[rail]
+# Coaster track tuning (booster planning + path staircasing). Powered rail only lands on
+# straights/ascending cells, never on/next to a curve.
+booster_every       = 4      # a booster every N straight cells
+curve_exit_boost    = true   # extra boosters just after corners (keep momentum out of turns)
+climb_base_boosters = 3
+max_deviation       = 24     # max cells a staircase corner may span
 
 # Three real GPS anchors (relative arrangement/orientation; NOT absolute scale).
 # elev_m from references/anchors_elev.csv (USGS 3DEP, 2026-06-07).
