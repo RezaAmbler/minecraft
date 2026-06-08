@@ -1,0 +1,34 @@
+[project]
+name = "legoland-california"
+version = "0.1.0"
+description = "Regenerable LEGOLAND California (private/family) Minecraft Java 1.21.8 world, datapack, and resource pack."
+requires-python = ">=3.12,<3.13"   # amulet-core 1.9.40 needs numpy<2, which only ships wheels for 3.11/3.12; see docs/DECISIONS.md
+readme = "CLAUDE.md"
+
+# Direct dependencies (exact pins). Full transitive lock: requirements.lock
+dependencies = [
+    "amulet-core==1.9.40",   # world save I/O (Anvil regions, chunks); pure-python, uses amulet-nbt
+    "numpy==1.26.4",         # last numpy 1.x (amulet-core pins numpy<2); heightmap/zone masks
+    "Pillow==12.2.0",        # source-map -> heightmap/zone-mask raster work
+    "mcschematic==11.4.4",   # .schem structure library export (pulls nbtlib>=2.0.4)
+    "nbtlib==2.0.4",         # raw NBT for level.dat / map items / entity NBT
+]
+
+# NOTE: `beet` is intentionally NOT a dependency. beet 0.115.0 requires Python >=3.14,
+# which is incompatible with the amulet/numpy<2 stack (3.12). The datapack is emitted by a
+# thin in-repo writer instead (src/datapack/). Inherited from Sodor (DECISIONS D3 / LD1).
+
+[tool.legoland]
+# The single interpreter this project is built with. build.py refuses to run on others.
+python = "3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src"]

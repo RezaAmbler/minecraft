@@ -1,0 +1,160 @@
+# =============================================================================
+# LEGOLAND California rides registry.
+#
+#  kind = "coaster"  -> a TRACKED rail ride (Minecraft rail + minecart + display rig).
+#                       `route` waypoints are snapped to a 4-connected grid; the rail
+#                       engine derives each cell's shape (straight/curve/ascending) from
+#                       neighbours. Rails are axis-aligned, max 1 block Y per cell, no
+#                       powered rail on curves, boosters only on straight/ascending cells.
+#  kind = "static"   -> a non-rideable themed structure (spinning/drop/flat ride) with
+#                       optional cheap visual-only display-entity motion. Do NOT attempt
+#                       rideable rotation/drop.
+#
+# Block coords are in the compressed world frame (config/transform.toml). Routes are
+# DRAFT starting points for Phase 1+; the exact track is finalised when the land's
+# terrain + structures exist (the route must stay on/above ground and reachable).
+# =============================================================================
+
+# ----------------------------------------------------------------------------- #
+# COASTERS (rail rides)
+# ----------------------------------------------------------------------------- #
+
+[[rides]]
+kind   = "coaster"
+key    = "the_dragon"
+name   = "The Dragon"
+land   = "castle_hill"
+mvp    = true                 # Phase 1 prototype rig (end-to-end before any roster)
+desc   = "Family steel coaster: a slow indoor dark-ride through the castle past a fire-breathing dragon, then a lift hill and outdoor drops around the keep."
+train_main = "red_concrete"   # dragon livery
+train_trim = "gold_block"
+train_accent = "lime_concrete"  # dragon green
+# DRAFT route around the castle at Castle Hill centre (75,-110). Phase 1 (P1.4) refines:
+# station -> indoor pass through the keep -> lift hill -> outdoor drops -> back to station.
+# y is the target rail height; the grid clamps adjacent steps to +/-1 and snaps to 4-connected.
+boarding = [60, 86, -96]
+route = [
+  [60, 86, -96],   # station / boarding
+  [88, 86, -96],   # enter castle (indoor dark section, slow)
+  [96, 87, -110],  # past the dragon show scene
+  [96, 90, -124],  # lift hill (climb)
+  [72, 90, -124],  # crest, outdoor
+  [60, 87, -120],  # first drop
+  [56, 86, -108],  # swoop around the keep
+  [60, 86, -96],   # return to station (closes loop)
+]
+
+[[rides]]
+kind   = "coaster"
+key    = "coastersaurus"
+name   = "Coastersaurus"
+land   = "dino_valley"
+mvp    = false
+desc   = "Junior steel coaster weaving past giant LEGO dinosaurs through jungle foliage."
+train_main = "green_concrete"
+train_trim = "brown_terracotta"
+boarding = [-48, 77, 83]
+route = []                    # filled when Dino Valley is built (Phase 2+)
+
+[[rides]]
+kind   = "coaster"
+key    = "technic_coaster"
+name   = "LEGO Technic Coaster"
+land   = "imagination_zone"
+mvp    = false
+desc   = "Steel wild-mouse coaster (Mack Rides): tight switchback turns and sharp drops. The park's fastest ride."
+train_main = "orange_concrete"
+train_trim = "gray_concrete"
+boarding = [-30, 76, -30]
+route = []
+
+[[rides]]
+kind   = "coaster"
+key    = "galacticoaster"
+name   = "Galacticoaster"
+land   = "lego_galaxy"
+mvp    = false
+desc   = "Indoor family space coaster (opened 2026): guests 'design their ship' for a ~40 mph adventure."
+train_main = "cyan_concrete"
+train_trim = "iron_block"
+boarding = [-144, 81, -13]
+route = []
+
+[[rides]]
+kind   = "coaster"
+key    = "cargo_ace"
+name   = "Cargo Ace"
+land   = "land_of_adventure"   # Wikipedia; one source says Fun Town (uncertain — see DECISIONS)
+mvp    = false
+desc   = "Kids' tracked airplane coaster: a small circuit where riders bank like pilots."
+train_main = "white_concrete"
+train_trim = "red_concrete"
+boarding = [-20, 78, 100]
+route = []
+
+# ----------------------------------------------------------------------------- #
+# STATIC themed rides (non-rideable structures; visual-only motion where cheap)
+# ----------------------------------------------------------------------------- #
+
+[[rides]]
+kind = "static"
+key  = "royal_joust"
+name = "The Royal Joust"
+land = "castle_hill"
+desc = "Rocking LEGO-horse kiddie ride."
+
+[[rides]]
+kind = "static"
+key  = "beetle_bounce"
+name = "Beetle Bounce"
+land = "land_of_adventure"
+desc = "Small drop tower that hops riders up toward LEGO scarab beetles."
+
+[[rides]]
+kind = "static"
+key  = "captain_crankys_challenge"
+name = "Captain Cranky's Challenge"
+land = "pirate_shores"
+desc = "Swaying/spinning pirate-ship swing."
+
+[[rides]]
+kind = "static"
+key  = "driving_school"
+name = "Driving School"
+land = "fun_town"
+desc = "LEGO-car driving course (free-drive — static themed course, not rideable)."
+
+[[rides]]
+kind = "static"
+key  = "bionicle_blaster"
+name = "Bionicle Blaster"
+land = "imagination_zone"
+desc = "Rider-spun teacup ride."
+
+[[rides]]
+kind = "static"
+key  = "g_force_test_facility"
+name = "G-Force Test Facility"
+land = "lego_galaxy"
+desc = "Spinning/tilting astronaut-trainer (opened 2026)."
+
+[[rides]]
+kind = "static"
+key  = "unikitty_disco_drop"
+name = "Unikitty's Disco Drop"
+land = "lego_movie_world"
+desc = "Spinning drop tower."
+
+[[rides]]
+kind = "static"
+key  = "ninjago_the_ride"
+name = "NINJAGO The Ride"
+land = "ninjago_world"
+desc = "Hand-gesture interactive dark ride (static themed building)."
+
+[[rides]]
+kind = "static"
+key  = "explorer_river_quest"
+name = "Explorer River Quest"
+land = "dino_valley"
+desc = "Gentle boat ride (static water channel)."

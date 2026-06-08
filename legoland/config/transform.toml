@@ -1,0 +1,84 @@
+# =============================================================================
+# Real-world -> block COMPRESSED transform for LEGOLAND California (Carlsbad).
+#
+# The park's real geography (relative land positions + relative elevation) is
+# squashed horizontally onto a ~500-block footprint, with vertical elevation
+# exaggerated so the hillside stays legible after horizontal compression.
+#
+# Anchors are three real GPS pins used for RELATIVE arrangement/orientation only
+# (NOT absolute scale). Elevations are USGS 3DEP (public domain), fetched
+# 2026-06-07 into references/anchors_elev.csv + references/dem_grid.csv.
+#
+# Projection: equirectangular about the park centroid -> local metres ->
+#   block_x =  east_m  / compression_factor
+#   block_z = -north_m / compression_factor          (Minecraft +Z is south)
+#   block_y =  base_y + (elev_m - elev_ref_m) * vertical_blocks_per_metre
+# The derived vertical exaggeration vs the compressed footprint is
+#   vertical_blocks_per_metre * compression_factor = 1.0 * 1.6 = 1.6x  (in [1.5, 2.0]).
+# See docs/DECISIONS.md (LD4) for the full rationale.
+# =============================================================================
+
+[park]
+name        = "LEGOLAND California"
+# Park centroid (origin of the local-metres projection). Centre of the data bbox.
+centroid_lat = 33.1275
+centroid_lon = -117.3115
+# Data bounding box the DEM grid was sampled over (references/dem_grid.csv).
+bbox_min_lat = 33.124
+bbox_max_lat = 33.131
+bbox_min_lon = -117.316
+bbox_max_lon = -117.307
+
+[scale]
+# Horizontal: metres of real ground per Minecraft block.
+# Padded bbox ~839 m E-W / ~779 m N-S  ->  ~524 x ~487 blocks at 1.6 m/block (~500 across).
+compression_factor      = 1.6        # m per block (horizontal)
+park_blocks             = 500        # nominal footprint across (informational)
+# Vertical: blocks of height per metre of real elevation. With the 1.6 m/block
+# horizontal scale this yields a 1.6x vertical exaggeration of the compressed world.
+vertical_blocks_per_metre = 1.0
+vertical_exaggeration   = 1.6        # derived (informational): vbpm * compression_factor
+
+[frame]
+# Where the park sits in the Minecraft world, and the vertical datum.
+center_x   = 0          # park centroid maps to this block X
+center_z   = 0          # park centroid maps to this block Z
+base_y     = 64         # block Y that the elevation reference (elev_ref_m) maps to
+elev_ref_m = 34.0       # real-world elevation (m) mapped to base_y (bbox minimum)
+# Central lake ("Lago"/Lake I) surface — the low point the hill drains toward (Phase 2+).
+lake_elev_m  = 40.0
+min_y      = -64
+max_y      = 320
+
+[world]
+world_name = "LEGOLAND California"
+seed       = 4790       # fixed -> deterministic terrain noise (client DataVersion, memorable)
+# World border hugs the park footprint (centre + size in blocks). Size padded over ~520.
+border_center = [0, 0]
+border_size   = 620
+
+# Three real GPS anchors (relative arrangement/orientation; NOT absolute scale).
+# elev_m from references/anchors_elev.csv (USGS 3DEP, 2026-06-07).
+[[anchor]]
+key   = "the_dragon"
+ride  = "The Dragon"
+land  = "castle_hill"
+lat   = 33.12903
+lon   = -117.30995
+elev_m = 56.890
+
+[[anchor]]
+key   = "coastersaurus"
+ride  = "Coastersaurus"
+land  = "dino_valley"
+lat   = 33.12631
+lon   = -117.31232
+elev_m = 47.311
+
+[[anchor]]
+key   = "galacticoaster"
+ride  = "Galacticoaster"
+land  = "lego_galaxy"
+lat   = 33.12768
+lon   = -117.31398
+elev_m = 50.950

@@ -1,0 +1,124 @@
+# =============================================================================
+# LEGOLAND California lands registry (the "locations" of the build).
+#
+# Block centres are in the compressed world frame defined by config/transform.toml
+# (park centroid -> (0,0); +X east, +Z south; ~1.6 m/block). The three coaster
+# anchors are EXACT (derived from GPS); all other land centres are APPROXIMATE,
+# inferred from the official park map + the anchored geography (entrance NE on the
+# hilltop, lands radiating around the central lake which sits low to the south).
+# Refine per land as each is built. See docs/LEGOLAND_REFERENCE.md.
+#
+# `mvp = true` marks the land built in Phase 1 (Castle Hill only).
+# `in_brief` records whether the land was in the original user brief; lands without
+# it are real-park corrections added per decision LD5 (logged in DECISIONS.md).
+# =============================================================================
+
+[[lands]]
+key       = "the_beginning"
+name      = "The Beginning"
+theme     = "Park entrance plaza, shops, ticketing, giant LEGO models"
+palette   = ["red_concrete", "yellow_concrete", "blue_concrete", "white_concrete"]
+center    = [60, -160]      # entrance, top of hill, north of Castle Hill
+footprint = 110
+in_brief  = true
+mvp       = false
+
+[[lands]]
+key       = "castle_hill"
+name      = "Castle Hill"
+theme     = "Medieval kingdom: stone castle, banners, The Dragon coaster"
+palette   = ["stone_bricks", "cobblestone", "dark_oak_planks", "red_wool", "blue_wool", "gold_block"]
+center    = [75, -110]      # around The Dragon anchor (90, -106); highest, NE
+footprint = 140
+in_brief  = true
+mvp       = true
+
+[[lands]]
+key       = "miniland_usa"
+name      = "Miniland USA"
+theme     = "Miniature LEGO-brick replicas of US landmarks, around the lake"
+palette   = ["white_concrete", "light_gray_concrete", "green_concrete", "blue_concrete"]
+center    = [0, 0]          # central, on/near the lake
+footprint = 130
+in_brief  = true
+mvp       = false
+
+[[lands]]
+key       = "fun_town"
+name      = "Fun Town"
+theme     = "Miniature city: driving school, factory tour, civic buildings"
+palette   = ["white_concrete", "red_concrete", "light_blue_concrete", "yellow_terracotta"]
+center    = [10, -50]       # central, between entrance and lake
+footprint = 120
+in_brief  = true
+mvp       = false
+
+[[lands]]
+key       = "imagination_zone"
+name      = "Imagination Zone"
+theme     = "STEM/building play, robotics, Technic; home of the Technic Coaster"
+palette   = ["gray_concrete", "black_concrete", "yellow_concrete", "orange_concrete"]
+center    = [-30, -30]      # central, near Fun Town / lake
+footprint = 120
+in_brief  = false           # LD5 correction: real land, was missing from brief
+mvp       = false
+
+[[lands]]
+key       = "lego_galaxy"
+name      = "LEGO Galaxy"
+theme     = "Space/sci-fi adventure (opened 2026); home of Galacticoaster"
+palette   = ["black_concrete", "blue_concrete", "cyan_concrete", "magenta_concrete", "iron_block"]
+center    = [-150, -10]     # around Galacticoaster anchor (-144, -13); west/SW
+footprint = 130
+in_brief  = true
+mvp       = false
+
+[[lands]]
+key       = "lego_movie_world"
+name      = "The LEGO Movie World"
+theme     = "Bricksburg / The LEGO Movie city (replaced Heartlake City, 2021)"
+palette   = ["red_concrete", "yellow_concrete", "lime_concrete", "pink_concrete", "light_blue_concrete"]
+center    = [-110, -70]     # west/north of lake
+footprint = 120
+in_brief  = false           # LD5 correction: real land, was missing from brief
+mvp       = false
+
+[[lands]]
+key       = "ninjago_world"
+name      = "LEGO NINJAGO World"
+theme     = "Ninja training & elemental dojo"
+palette   = ["black_concrete", "gold_block", "green_concrete", "red_concrete", "bamboo_planks"]
+center    = [-130, -120]    # west/north
+footprint = 120
+in_brief  = true
+mvp       = false
+
+[[lands]]
+key       = "pirate_shores"
+name      = "Pirate Shores"
+theme     = "Swashbuckling water play & pirate ship"
+palette   = ["spruce_planks", "dark_oak_planks", "white_wool", "red_wool", "sand"]
+center    = [-60, 90]       # south/SW, lakeside (lower)
+footprint = 120
+in_brief  = true
+mvp       = false
+
+[[lands]]
+key       = "land_of_adventure"
+name      = "Land of Adventure"
+theme     = "Egyptian/Indiana-Jones ruins & desert dig; Beetle Bounce, Cargo Ace"
+palette   = ["sandstone", "smooth_sandstone", "cut_sandstone", "orange_terracotta", "gold_block"]
+center    = [-20, 100]      # south, near Pirate Shores / Dino Valley
+footprint = 120
+in_brief  = false           # LD5 correction: real land, was missing from brief
+mvp       = false
+
+[[lands]]
+key       = "dino_valley"
+name      = "Dino Valley"
+theme     = "Prehistoric jungle with giant LEGO dinosaurs; Coastersaurus"
+palette   = ["green_concrete", "jungle_planks", "moss_block", "brown_terracotta", "sand"]
+center    = [-45, 85]       # around Coastersaurus anchor (-48, 83); south-central lakeside
+footprint = 130
+in_brief  = true
+mvp       = false
